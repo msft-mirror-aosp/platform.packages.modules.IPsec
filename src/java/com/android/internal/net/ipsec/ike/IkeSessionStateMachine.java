@@ -1504,6 +1504,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 case CMD_LOCAL_REQUEST_CREATE_CHILD: // fallthrough
                 case CMD_LOCAL_REQUEST_REKEY_CHILD: // fallthrough
                 case CMD_LOCAL_REQUEST_REKEY_CHILD_MOBIKE: // fallthrough
+                case CMD_LOCAL_REQUEST_MIGRATE_CHILD: // fallthrough
                 case CMD_LOCAL_REQUEST_DELETE_CHILD:
                     deferMessage(message);
                     transitionTo(mChildProcedureOngoing);
@@ -1699,6 +1700,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 case CMD_LOCAL_REQUEST_CREATE_CHILD: // Fallthrough
                 case CMD_LOCAL_REQUEST_REKEY_CHILD: // Fallthrough
                 case CMD_LOCAL_REQUEST_REKEY_CHILD_MOBIKE: // Fallthrough
+                case CMD_LOCAL_REQUEST_MIGRATE_CHILD: // Fallthrough
                 case CMD_LOCAL_REQUEST_DELETE_CHILD:
                     ChildLocalRequest childReq = (ChildLocalRequest) req;
                     if (childReq.procedureType != requestVal) {
@@ -2705,8 +2707,14 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 case CMD_LOCAL_REQUEST_REKEY_CHILD:
                     mChildInLocalProcedure.rekeyChildSession();
                     break;
+                case CMD_LOCAL_REQUEST_MIGRATE_CHILD:
+                    mChildInLocalProcedure.performMigration(
+                            mIkeConnectionCtrl.getLocalAddress(),
+                            mIkeConnectionCtrl.getRemoteAddress(),
+                            getEncapSocketOrNull());
+                    break;
                 case CMD_LOCAL_REQUEST_REKEY_CHILD_MOBIKE:
-                    mChildInLocalProcedure.rekeyChildSessionForMobike(
+                    mChildInLocalProcedure.performRekeyMigration(
                             mIkeConnectionCtrl.getLocalAddress(),
                             mIkeConnectionCtrl.getRemoteAddress(),
                             getEncapSocketOrNull());
@@ -5516,7 +5524,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 logd(
                         "Non-MOBIKE mobility event: Server does not send"
                             + " NOTIFY_TYPE_MOBIKE_SUPPORTED. Skip UPDATE_SA_ADDRESSES exchange");
-                migrateAllChildSAs();
+                migrateAllChildSAs(false /* mobikeEnabled */);
                 notifyConnectionInfoChanged();
                 transitionTo(mIdle);
                 return;
@@ -5606,7 +5614,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             try {
                 validateResp(resp);
 
-                migrateAllChildSAs();
+                migrateAllChildSAs(true /* mobikeEnabled */);
                 notifyConnectionInfoChanged();
                 transitionTo(mIdle);
             } catch (IkeException | IOException e) {
@@ -5690,16 +5698,18 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             mIkeConnectionCtrl.handleNatDetectionResultInMobike(isNatDetected);
         }
 
-        private void migrateAllChildSAs() {
-            // TODO(b/172015298): migrate Child SAs directly if Kernel support
+        private void migrateAllChildSAs(boolean mobikeEnabled) {
+            final int command =
+                    mobikeEnabled
+                            ? CMD_LOCAL_REQUEST_MIGRATE_CHILD
+                            : CMD_LOCAL_REQUEST_REKEY_CHILD_MOBIKE;
 
-            // Schedule MOBIKE Rekeys for all Child Sessions
+            // Schedule MOBIKE for all Child Sessions
             for (int i = 0; i < mRemoteSpiToChildSessionMap.size(); i++) {
                 int remoteChildSpi = mRemoteSpiToChildSessionMap.keyAt(i);
                 sendMessage(
-                        CMD_LOCAL_REQUEST_REKEY_CHILD_MOBIKE,
-                        mLocalRequestFactory.getChildLocalRequest(
-                                CMD_LOCAL_REQUEST_REKEY_CHILD_MOBIKE, remoteChildSpi));
+                        command,
+                        mLocalRequestFactory.getChildLocalRequest(command, remoteChildSpi));
             }
         }
 

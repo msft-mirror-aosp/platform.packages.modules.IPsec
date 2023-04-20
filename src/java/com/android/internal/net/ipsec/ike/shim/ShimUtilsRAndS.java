@@ -16,6 +16,7 @@
 
 package com.android.internal.net.ipsec.ike.shim;
 
+import android.content.Context;
 import android.net.Network;
 import android.net.SocketKeepalive;
 import android.net.ipsec.ike.exceptions.IkeException;
@@ -74,5 +75,10 @@ public class ShimUtilsRAndS extends ShimUtils {
     @Override
     public boolean shouldSkipIfSameNetwork(boolean skipIfSameNetwork) {
         return true;
+    }
+
+    @Override
+    public boolean supportsSameSocketKernelMigration(Context context) {
+        return false;
     }
 }
