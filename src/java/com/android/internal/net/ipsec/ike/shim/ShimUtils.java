@@ -16,6 +16,7 @@
 
 package com.android.internal.net.ipsec.ike.shim;
 
+import android.content.Context;
 import android.net.Network;
 import android.net.SocketKeepalive;
 import android.net.ipsec.ike.exceptions.IkeException;
@@ -80,4 +81,13 @@ public abstract class ShimUtils {
      */
     public abstract void startKeepalive(SocketKeepalive keepalive, int keepaliveDelaySeconds,
             int keepaliveOptions, Network underpinnedNetwork);
+
+    /**
+     * Return if IkeConnectionController can skip a mobility update when the underlying network and
+     * addresses do not change
+     */
+    public abstract boolean shouldSkipIfSameNetwork(boolean skipIfSameNetwork);
+
+    /** Returns if the device supports kernel migration without encap socket changes. */
+    public abstract boolean supportsSameSocketKernelMigration(Context context);
 }
