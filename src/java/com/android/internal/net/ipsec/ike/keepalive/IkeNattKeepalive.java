@@ -23,7 +23,6 @@ import android.content.Context;
 import android.net.ConnectivityManager;
 import android.net.IpSecManager.UdpEncapsulationSocket;
 import android.net.Network;
-import android.net.NetworkCapabilities;
 import android.net.ipsec.ike.IkeSessionParams;
 
 import com.android.internal.net.ipsec.ike.IkeContext;
@@ -43,8 +42,18 @@ public class IkeNattKeepalive {
     private static final String TAG = "IkeNattKeepalive";
 
     private final Dependencies mDeps;
+    private final Context mContext;
+    private final ConnectivityManager mConnectivityManager;
 
     private NattKeepalive mNattKeepalive;
+    private KeepaliveConfig mNattKeepaliveConfig;
+
+    /**
+     * The hardware keepalive that is being stopped but has not fired the onStopped callback.
+     *
+     * <p>This field is set as part of restart and is cleared when the restart is finished
+     */
+    private HardwareKeepaliveImpl mHardwareKeepalivePendingOnStopped;
 
     /** Construct an instance of IkeNattKeepalive */
     public IkeNattKeepalive(
@@ -61,24 +70,21 @@ public class IkeNattKeepalive {
             KeepaliveConfig nattKeepaliveConfig,
             Dependencies deps)
             throws IOException {
-        final long keepaliveDelayMs = nattKeepaliveConfig.ikeAlarmConfig.delayMs;
-        mNattKeepalive =
-                new HardwareKeepaliveImpl(
-                        ikeContext.getContext(),
-                        connectMgr,
-                        (int) TimeUnit.MILLISECONDS.toSeconds(keepaliveDelayMs),
-                        nattKeepaliveConfig.ikeParams,
-                        nattKeepaliveConfig.src,
-                        nattKeepaliveConfig.dest,
-                        nattKeepaliveConfig.socket,
-                        nattKeepaliveConfig.network,
-                        nattKeepaliveConfig.underpinnedNetwork,
-                        new HardwareKeepaliveCb(
-                                ikeContext.getContext(),
-                                nattKeepaliveConfig.dest,
-                                nattKeepaliveConfig.socket,
-                                nattKeepaliveConfig.ikeAlarmConfig));
         mDeps = deps;
+        mContext = ikeContext.getContext();
+        mConnectivityManager = connectMgr;
+        mNattKeepaliveConfig = nattKeepaliveConfig;
+
+        mNattKeepalive =
+                mDeps.createHardwareKeepaliveImpl(
+                        mContext,
+                        mConnectivityManager,
+                        mNattKeepaliveConfig,
+                        new HardwareKeepaliveCb(
+                                mContext,
+                                mNattKeepaliveConfig.dest,
+                                mNattKeepaliveConfig.socket,
+                                mNattKeepaliveConfig.ikeAlarmConfig));
     }
 
     /** Configuration object for constructing an IkeNattKeepalive instance */
@@ -91,7 +97,6 @@ public class IkeNattKeepalive {
         public final Network underpinnedNetwork;
         public final IkeAlarmConfig ikeAlarmConfig;
         public final IkeSessionParams ikeParams;
-        public final NetworkCapabilities nc;
 
         public KeepaliveConfig(
                 Inet4Address src,
@@ -100,8 +105,7 @@ public class IkeNattKeepalive {
                 Network network,
                 Network underpinnedNetwork,
                 IkeAlarmConfig ikeAlarmConfig,
-                IkeSessionParams ikeParams,
-                NetworkCapabilities nc) {
+                IkeSessionParams ikeParams) {
             this.src = src;
             this.dest = dest;
             this.socket = socket;
@@ -109,7 +113,6 @@ public class IkeNattKeepalive {
             this.underpinnedNetwork = underpinnedNetwork;
             this.ikeAlarmConfig = ikeAlarmConfig;
             this.ikeParams = ikeParams;
-            this.nc = nc;
         }
     }
 
@@ -125,6 +128,61 @@ public class IkeNattKeepalive {
         getIkeLog().d(TAG, "Stop NAT-T keepalive");
 
         mNattKeepalive.stop();
+    }
+
+    private void finishRestartingWithNewHardwareKeepalive() {
+        mHardwareKeepalivePendingOnStopped = null;
+
+        mNattKeepalive.stop();
+        mNattKeepalive =
+                mDeps.createHardwareKeepaliveImpl(
+                        mContext,
+                        mConnectivityManager,
+                        mNattKeepaliveConfig,
+                        new HardwareKeepaliveCb(
+                                mContext,
+                                mNattKeepaliveConfig.dest,
+                                mNattKeepaliveConfig.socket,
+                                mNattKeepaliveConfig.ikeAlarmConfig));
+        mNattKeepalive.start();
+    }
+
+    /** Update the keepalive config and restart the keepalive */
+    public void restart(KeepaliveConfig nattKeepaliveConfig) {
+        getIkeLog().d(TAG, "restart");
+
+        mNattKeepaliveConfig = nattKeepaliveConfig;
+
+        if (mNattKeepalive instanceof HardwareKeepaliveImpl) {
+            mHardwareKeepalivePendingOnStopped = (HardwareKeepaliveImpl) mNattKeepalive;
+            getIkeLog()
+                    .d(
+                            TAG,
+                            "Wait for onStopped on "
+                                    + mHardwareKeepalivePendingOnStopped
+                                    + " before starting new hardware keepalive");
+        }
+
+        if (mHardwareKeepalivePendingOnStopped != null) {
+            // Start software keepalive and wait for the onStopped callback before starting new
+            // hardware offload. Each network has limited quota for hardware keepalive. Thus in
+            // this case, IKE should not start new hardware offload until the old one is stopped.
+            mNattKeepalive.stop();
+            mNattKeepalive =
+                    mDeps.createSoftwareKeepaliveImpl(
+                            mContext,
+                            mNattKeepaliveConfig.dest,
+                            mNattKeepaliveConfig.socket,
+                            mNattKeepaliveConfig.ikeAlarmConfig);
+            mNattKeepalive.start();
+        } else {
+            finishRestartingWithNewHardwareKeepalive();
+        }
+    }
+
+    /** Check whether the IkeNattKeepalive is being restarted */
+    public boolean isRestarting() {
+        return mHardwareKeepalivePendingOnStopped != null;
     }
 
     /** Receive a keepalive alarm */
@@ -149,6 +207,25 @@ public class IkeNattKeepalive {
                 UdpEncapsulationSocket socket,
                 IkeAlarmConfig alarmConfig) {
             return new SoftwareKeepaliveImpl(context, dest, socket, alarmConfig);
+        }
+
+        HardwareKeepaliveImpl createHardwareKeepaliveImpl(
+                Context context,
+                ConnectivityManager connectMgr,
+                KeepaliveConfig nattKeepaliveConfig,
+                HardwareKeepaliveImpl.HardwareKeepaliveCallback hardwareKeepaliveCb) {
+            final long keepaliveDelayMs = nattKeepaliveConfig.ikeAlarmConfig.delayMs;
+            return new HardwareKeepaliveImpl(
+                    context,
+                    connectMgr,
+                    (int) TimeUnit.MILLISECONDS.toSeconds(keepaliveDelayMs),
+                    nattKeepaliveConfig.ikeParams,
+                    nattKeepaliveConfig.src,
+                    nattKeepaliveConfig.dest,
+                    nattKeepaliveConfig.socket,
+                    nattKeepaliveConfig.network,
+                    nattKeepaliveConfig.underpinnedNetwork,
+                    hardwareKeepaliveCb);
         }
     }
 
@@ -190,6 +267,18 @@ public class IkeNattKeepalive {
             // TODO: b/182209475 Terminate IKE Sessions when
             // HardwareKeepaliveCallback#onNetworkError is fired
             stop();
+        }
+
+        @Override
+        public void onStopped(HardwareKeepaliveImpl hardwareKeepalive) {
+            getIkeLog()
+                    .d(
+                            TAG,
+                            "Hardware keepalive onStopped on hardwareKeepalive "
+                                    + hardwareKeepalive);
+            if (hardwareKeepalive == mHardwareKeepalivePendingOnStopped) {
+                finishRestartingWithNewHardwareKeepalive();
+            }
         }
     }
 }
