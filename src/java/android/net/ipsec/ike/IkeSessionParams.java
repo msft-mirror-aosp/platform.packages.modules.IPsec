@@ -2176,6 +2176,12 @@ public final class IkeSessionParams {
                                 + " method is digital-signature-based");
             }
 
+            if ((mIpVersion == ESP_IP_VERSION_IPV4 && mEncapType == ESP_ENCAP_TYPE_NONE)
+                    || (mIpVersion == ESP_IP_VERSION_IPV6 && mEncapType == ESP_ENCAP_TYPE_UDP)) {
+                throw new UnsupportedOperationException("Sending packets with IPv4 ESP or IPv6 UDP"
+                        + " are not supported");
+            }
+
             return new IkeSessionParams(
                     mServerHostname,
                     defaultOrConfiguredNetwork,
