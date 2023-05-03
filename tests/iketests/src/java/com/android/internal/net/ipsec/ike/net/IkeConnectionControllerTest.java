@@ -210,12 +210,20 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
         mIkeConnectionCtrl.tearDown();
     }
 
-    private void verifyKeepalive() {
-        boolean isIkeUdpEncapSocket =
-                mIkeConnectionCtrl.getIkeSocket() instanceof IkeUdpEncapSocket;
-        if (isIkeUdpEncapSocket) {
+    private void verifyKeepalive(boolean hasOldKeepalive, boolean isKeepaliveExpected)
+            throws Exception {
+        if (isKeepaliveExpected) {
             assertNotNull(mIkeConnectionCtrl.getIkeNattKeepalive());
+
+            if (hasOldKeepalive) {
+                verify(mMockIkeNattKeepalive).restart(any());
+            } else {
+                verify(mMockConnectionCtrlDeps).newIkeNattKeepalive(any(), any());
+            }
         } else {
+            if (hasOldKeepalive) {
+                verify(mMockIkeNattKeepalive).stop();
+            }
             assertNull(mIkeConnectionCtrl.getIkeNattKeepalive());
         }
     }
@@ -235,7 +243,9 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
         assertEquals(expectedRemoteAddress, mIkeConnectionCtrl.getRemoteAddress());
         assertTrue(socketType.isInstance(mIkeConnectionCtrl.getIkeSocket()));
         assertEquals(NAT_TRAVERSAL_SUPPORT_NOT_CHECKED, mIkeConnectionCtrl.getNatStatus());
-        verifyKeepalive();
+        verifyKeepalive(
+                false /* hasOldKeepalive */,
+                mIkeConnectionCtrl.getIkeSocket() instanceof IkeUdpEncapSocket);
 
         verifySocketBoundToNetwork(mIkeConnectionCtrl.getIkeSocket(), expectedNetwork);
     }
@@ -777,7 +787,7 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
                 true /* isNatDetected */, IKE_LOCAL_SPI);
 
         assertTrue(mIkeConnectionCtrl.getIkeSocket() instanceof IkeUdpEncapSocket);
-        verifyKeepalive();
+        verifyKeepalive(false /* hasOldKeepalive */, true /* isKeepaliveExpected */);
     }
 
     private IkeDefaultNetworkCallback getDefaultNetworkCallback() throws Exception {
@@ -862,7 +872,7 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
         enableMobilityAndReturnCb(true /* isDefaultNetwork */);
 
         assertTrue(mIkeConnectionCtrl.getIkeSocket() instanceof IkeUdpEncapSocket);
-        verifyKeepalive();
+        verifyKeepalive(false /* hasOldKeepalive */, true /* isKeepaliveExpected */);
     }
 
     @Test
@@ -871,7 +881,7 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
         enableMobilityAndReturnCb(true /* isDefaultNetwork */);
 
         assertTrue(mIkeConnectionCtrl.getIkeSocket() instanceof IkeUdp4Socket);
-        verifyKeepalive();
+        verifyKeepalive(false /* hasOldKeepalive */, false /* isKeepaliveExpected */);
     }
 
     @Test
@@ -879,7 +889,7 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
         mIkeConnectionCtrl.handleNatDetectionResultInMobike(true /* isNatDetected */);
 
         assertTrue(mIkeConnectionCtrl.getIkeSocket() instanceof IkeUdpEncapSocket);
-        verifyKeepalive();
+        verifyKeepalive(false /* hasOldKeepalive */, true /* isKeepaliveExpected */);
     }
 
     private void onNetworkSetByUserWithDefaultParams(
@@ -957,11 +967,13 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
         mIkeConnectionCtrl = buildIkeConnectionCtrl();
         mIkeConnectionCtrl.setUp();
         mIkeConnectionCtrl.registerIkeSaRecord(mMockIkeSaRecord);
+        boolean hasKeepalivePostSetup = false;
         if (doesPeerSupportNatt) {
             // Either NAT detected or not detected won't affect the test since both cases indicate
             // the server support NAT-T
             mIkeConnectionCtrl.handleNatDetectionResultInIkeInit(
                     true /* isNatDetected */, IKE_LOCAL_SPI);
+            hasKeepalivePostSetup = true;
         } else {
             mIkeConnectionCtrl.markSeverNattUnsupported();
         }
@@ -986,7 +998,9 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
         verify(mMockConnectionCtrlCb).onUnderlyingNetworkUpdated();
         verify(mMockIkeSaRecord).migrate(UPDATED_LOCAL_ADDRESS_V6, REMOTE_ADDRESS_V6);
         assertTrue(expectedSocketType.isInstance(mIkeConnectionCtrl.getIkeSocket()));
-        verifyKeepalive();
+        verifyKeepalive(
+                hasKeepalivePostSetup,
+                mIkeConnectionCtrl.getIkeSocket() instanceof IkeUdpEncapSocket);
     }
 
     @Test
@@ -1223,5 +1237,19 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
 
         verify(mMockConnectionCtrlCb, never()).onUnderlyingNetworkUpdated();
         verify(mMockConnectionCtrlCb, never()).onUnderlyingNetworkDied(any());
+    }
+
+    @IgnoreAfter(VERSION_CODES.TIRAMISU)
+    @Test
+    public void testOnUnderpinnedNetworkSetByUser() throws Exception {
+        mIkeConnectionCtrl.handleNatDetectionResultInIkeInit(
+                true /* isNatDetected */, IKE_LOCAL_SPI);
+        verifyKeepalive(false /* hasOldKeepalive */, true /* isKeepaliveExpected */);
+        assertTrue(mIkeConnectionCtrl.getIkeSocket() instanceof IkeUdpEncapSocket);
+
+        final Network underpinnedNetwork = mock(Network.class);
+        mIkeConnectionCtrl.onUnderpinnedNetworkSetByUser(underpinnedNetwork);
+        verifyKeepalive(true /* hasOldKeepalive */, true /* isKeepaliveExpected */);
+        assertEquals(underpinnedNetwork, mIkeConnectionCtrl.getUnderpinnedNetwork());
     }
 }
