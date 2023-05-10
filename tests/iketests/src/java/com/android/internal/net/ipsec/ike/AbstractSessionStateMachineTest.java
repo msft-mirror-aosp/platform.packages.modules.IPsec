@@ -95,6 +95,16 @@ public final class AbstractSessionStateMachineTest {
             protected String getCmdString(int cmd) {
                 return Integer.toString(cmd);
             }
+
+            @Override
+            protected int getMetricsStateCode() {
+                return 0;
+            }
+        }
+
+        @Override
+        protected int getMetricsSessionType() {
+            return 0;
         }
     }
 

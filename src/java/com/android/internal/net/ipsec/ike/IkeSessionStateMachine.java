@@ -177,6 +177,7 @@ import com.android.internal.net.ipsec.ike.shim.IIkeSessionStateMachineShim;
 import com.android.internal.net.ipsec.ike.shim.ShimUtils;
 import com.android.internal.net.ipsec.ike.utils.IkeAlarm;
 import com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver;
+import com.android.internal.net.ipsec.ike.utils.IkeMetricsInterface;
 import com.android.internal.net.ipsec.ike.utils.IkeSecurityParameterIndex;
 import com.android.internal.net.ipsec.ike.utils.IkeSpiGenerator;
 import com.android.internal.net.ipsec.ike.utils.IpSecSpiGenerator;
@@ -1258,6 +1259,11 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                     return NOT_HANDLED;
             }
         }
+
+        @Override
+        protected int getMetricsStateCode() {
+            return IkeMetricsInterface.IKE_SESSION_TERMINATED__IKE_STATE__STATE_IKE_KILL;
+        }
     }
 
     // This method should always run on the IKE worker thread
@@ -1348,6 +1354,11 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         @Override
         public void exitState() {
             mInitialSetupData = null;
+        }
+
+        @Override
+        protected int getMetricsStateCode() {
+            return IkeMetricsInterface.IKE_SESSION_TERMINATED__IKE_STATE__STATE_IKE_INITIAL;
         }
     }
 
@@ -1537,6 +1548,11 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 }
             }
             return false;
+        }
+
+        @Override
+        protected int getMetricsStateCode() {
+            return IkeMetricsInterface.IKE_SESSION_TERMINATED__IKE_STATE__STATE_IKE_IDLE;
         }
     }
 
@@ -2491,6 +2507,11 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             buildAndSendNotificationResponse(
                     mCurrentIkeSaRecord, messageId, e.buildNotifyPayload());
         }
+
+        @Override
+        protected int getMetricsStateCode() {
+            return IkeMetricsInterface.IKE_SESSION_TERMINATED__IKE_STATE__STATE_IKE_RECEIVING;
+        }
     }
 
     /**
@@ -3019,6 +3040,12 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             // response of the first exchange won't be added to the response of the second exchange.
             mOutboundRespPayloads.clear();
         }
+
+        @Override
+        protected int getMetricsStateCode() {
+            return IkeMetricsInterface
+                    .IKE_SESSION_TERMINATED__IKE_STATE__STATE_IKE_CHILD_PROCEDURE_ONGOING;
+        }
     }
 
     /** CreateIkeLocalIkeInit represents state when IKE library initiates IKE_INIT exchange. */
@@ -3526,6 +3553,12 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                                 .getRetransmissionFailedException(
                                         "Retransmitting IKE INIT request failure"));
             }
+        }
+
+        @Override
+        protected int getMetricsStateCode() {
+            return IkeMetricsInterface
+                    .IKE_SESSION_TERMINATED__IKE_STATE__STATE_IKE_CREATE_LOCAL_IKE_INIT;
         }
     }
 
@@ -4271,6 +4304,12 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             }
             super.exitState();
         }
+
+        @Override
+        protected int getMetricsStateCode() {
+            return IkeMetricsInterface
+                    .IKE_SESSION_TERMINATED__IKE_STATE__STATE_IKE_CREATE_LOCAL_IKE_AUTH;
+        }
     }
 
     /**
@@ -4444,6 +4483,12 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             }
             super.exitState();
         }
+
+        @Override
+        protected int getMetricsStateCode() {
+            return IkeMetricsInterface
+                    .IKE_SESSION_TERMINATED__IKE_STATE__STATE_IKE_CREATE_LOCAL_IKE_AUTH_IN_EAP;
+        }
     }
 
     /**
@@ -4580,6 +4625,12 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 CreateChildSaHelper.releaseSpiResources(mSetupData.firstChildReqList);
             }
             super.exitState();
+        }
+
+        @Override
+        protected int getMetricsStateCode() {
+            return IkeMetricsInterface
+                    .IKE_SESSION_TERMINATED__IKE_STATE__STATE_IKE_CREATE_LOCAL_IKE_AUTH_POST_EAP;
         }
     }
 
@@ -4929,6 +4980,12 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             sendEncryptedIkeMessage(buildIkeDeleteReq(mCurrentIkeSaRecord));
             handleIkeFatalError(exception);
         }
+
+        @Override
+        protected int getMetricsStateCode() {
+            return IkeMetricsInterface
+                    .IKE_SESSION_TERMINATED__IKE_STATE__STATE_IKE_REKEY_LOCAL_CREATE;
+        }
     }
 
     /**
@@ -5006,6 +5063,12 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             } catch (IOException e) {
                 // TODO: SPI allocation collided - delete new IKE SA, retry rekey.
             }
+        }
+
+        @Override
+        protected int getMetricsStateCode() {
+            return IkeMetricsInterface
+                    .IKE_SESSION_TERMINATED__IKE_STATE__STATE_IKE_SIMULTANEOUS_REKEY_LOCAL_CREATE;
         }
     }
 
@@ -5203,6 +5266,12 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             mRetransmitter.stopRetransmitting();
             // TODO: Stop awaiting delete request timer.
         }
+
+        @Override
+        protected int getMetricsStateCode() {
+            return IkeMetricsInterface
+                    .IKE_SESSION_TERMINATED__IKE_STATE__STATE_IKE_SIMULTANEOUS_REKEY_LOCAL_DELETE_REMOTE_DELETE;
+        }
     }
 
     /**
@@ -5268,6 +5337,12 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                         new IllegalStateException("Delete response received on incorrect SA"));
             }
         }
+
+        @Override
+        protected int getMetricsStateCode() {
+            return IkeMetricsInterface
+                    .IKE_SESSION_TERMINATED__IKE_STATE__STATE_IKE_SIMULTANEOUS_REKEY_LOCAL_DELETE;
+        }
     }
 
     /**
@@ -5305,6 +5380,12 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                             ERROR_TYPE_TEMPORARY_FAILURE);
             }
         }
+
+        @Override
+        protected int getMetricsStateCode() {
+            return IkeMetricsInterface
+                    .IKE_SESSION_TERMINATED__IKE_STATE__STATE_IKE_SIMULTANEOUS_REKEY_REMOTE_DELETE;
+        }
     }
 
     /**
@@ -5336,6 +5417,12 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         @Override
         public void exitState() {
             mRetransmitter.stopRetransmitting();
+        }
+
+        @Override
+        protected int getMetricsStateCode() {
+            return IkeMetricsInterface
+                    .IKE_SESSION_TERMINATED__IKE_STATE__STATE_IKE_REKEY_LOCAL_DELETE;
         }
     }
 
@@ -5373,6 +5460,12 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         @Override
         public void exitState() {
             removeMessages(TIMEOUT_REKEY_REMOTE_DELETE);
+        }
+
+        @Override
+        protected int getMetricsStateCode() {
+            return IkeMetricsInterface
+                    .IKE_SESSION_TERMINATED__IKE_STATE__STATE_IKE_REKEY_REMOTE_DELETE;
         }
     }
 
@@ -5434,6 +5527,12 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         @Override
         public void exitState() {
             mRetransmitter.stopRetransmitting();
+        }
+
+        @Override
+        protected int getMetricsStateCode() {
+            return IkeMetricsInterface
+                    .IKE_SESSION_TERMINATED__IKE_STATE__STATE_IKE_DELETE_LOCAL_DELETE;
         }
     }
 
@@ -5506,6 +5605,11 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         @Override
         public void exitState() {
             mRetransmitter.stopRetransmitting();
+        }
+
+        @Override
+        protected int getMetricsStateCode() {
+            return IkeMetricsInterface.IKE_SESSION_TERMINATED__IKE_STATE__STATE_IKE_DPD_LOCAL_INFO;
         }
     }
 
@@ -5719,6 +5823,12 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             executeUserCallback(
                     () -> mIkeSessionCallback.onIkeSessionConnectionInfoChanged(connectionInfo));
         }
+
+        @Override
+        protected int getMetricsStateCode() {
+            return IkeMetricsInterface
+                    .IKE_SESSION_TERMINATED__IKE_STATE__STATE_IKE_MOBIKE_LOCAL_INFO;
+        }
     }
 
     private static void addNatDetectionPayloadsToList(
@@ -5931,5 +6041,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
     @Override
     public void onFatalError(Exception e) {
         handleIkeFatalError(e);
+    }
+
+    @Override
+    protected int getMetricsSessionType() {
+        return IkeMetricsInterface.IKE_SESSION_TERMINATED__SESSION_TYPE__SESSION_IKE;
     }
 }

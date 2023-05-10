@@ -183,6 +183,8 @@ abstract class AbstractSessionStateMachine extends StateMachine {
         protected abstract void cleanUpAndQuit(RuntimeException e);
 
         protected abstract String getCmdString(int cmd);
+
+        protected abstract int getMetricsStateCode();
     }
 
     protected void executeUserCallback(Runnable r) {
@@ -224,6 +226,8 @@ abstract class AbstractSessionStateMachine extends StateMachine {
 
         return "Null State";
     }
+
+    protected abstract int getMetricsSessionType();
 
     @Override
     protected void log(String s) {
