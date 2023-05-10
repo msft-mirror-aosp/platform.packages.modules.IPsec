@@ -378,8 +378,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
      */
     private final SparseArray<ChildSessionStateMachine> mRemoteSpiToChildSessionMap;
 
-    @VisibleForTesting final IkeContext mIkeContext;
-
     private final int mIkeSessionId;
     private final IpSecManager mIpSecManager;
     private final AlarmManager mAlarmManager;
@@ -493,7 +491,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             IkeSessionCallback ikeSessionCallback,
             ChildSessionCallback firstChildSessionCallback,
             Dependencies deps) {
-        super(TAG, looper, userCbExecutor);
+        super(
+                TAG,
+                deps.newIkeContext(looper, context, ikeParams.getConfiguredNetwork()),
+                userCbExecutor);
 
         if (ikeParams.hasIkeOption(IkeSessionParams.IKE_OPTION_MOBIKE)
                 || ikeParams.hasIkeOption(IkeSessionParams.IKE_OPTION_REKEY_MOBILITY)) {
@@ -526,8 +527,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         mAlarmManager = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
 
         mDeps = deps;
-        mIkeContext =
-                mDeps.newIkeContext(looper, context, mIkeSessionParams.getConfiguredNetwork());
         mLocalRequestFactory = mDeps.newLocalRequestFactory();
         mIkeConnectionCtrl =
                 mDeps.newIkeConnectionController(
@@ -992,6 +991,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 loge("Fatal error", error);
 
                 closeAllSaRecords(false /*expectSaClosed*/);
+
+                recordMetricsEvent_sessionTerminated(wrapAsIkeException(error));
                 quitSessionNow();
             } else {
                 logWtf("Unknown message.what: " + msg.what);
@@ -1165,6 +1166,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                     () -> {
                         mIkeSessionCallback.onClosedWithException(wrapAsIkeException(e));
                     });
+
+            recordMetricsEvent_sessionTerminated(wrapAsIkeException(e));
             logWtf("Unexpected exception in " + getCurrentStateName(), e);
             quitSessionNow();
         }
@@ -1223,6 +1226,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
     }
 
     private void handleIkeFatalError(Exception error) {
+        handleIkeFatalError(error, false /* isFromChild */);
+    }
+
+    private void handleIkeFatalError(Exception error, boolean isFromChild) {
         IkeException ikeException = wrapAsIkeException(error);
         loge("IKE Session fatal error in " + getCurrentState().getName(), ikeException);
 
@@ -1238,6 +1245,12 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                     () -> {
                         mIkeSessionCallback.onClosedWithException(ikeException);
                     });
+
+            // Fatal child session event metrics gathered in ChildSessionStateMachine
+            if (!isFromChild) {
+                recordMetricsEvent_sessionTerminated(ikeException);
+            }
+
             quitSessionNow();
         }
     }
@@ -1253,6 +1266,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                             () -> {
                                 mIkeSessionCallback.onClosed();
                             });
+                    recordMetricsEvent_sessionTerminated(null);
                     quitSessionNow();
                     return HANDLED;
                 default:
@@ -2343,6 +2357,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 mCurrentIkeSaRecord.close();
                 mCurrentIkeSaRecord = null;
 
+                recordMetricsEvent_sessionTerminated(null);
                 quitSessionNow();
             } catch (InvalidSyntaxException e) {
                 // Got deletion of a non-Current IKE SA. Program error.
@@ -2645,7 +2660,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                     return NOT_HANDLED;
                 case CMD_IKE_FATAL_ERROR_FROM_CHILD:
                     IkeFatalErrorFromChild fatalError = (IkeFatalErrorFromChild) message.obj;
-                    handleIkeFatalError(fatalError.exception);
+                    handleIkeFatalError(fatalError.exception, true /* isFromChild */);
                     return HANDLED;
                 default:
                     return super.processStateMessage(message);
@@ -5510,6 +5525,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 removeIkeSaRecord(mCurrentIkeSaRecord);
                 mCurrentIkeSaRecord.close();
                 mCurrentIkeSaRecord = null;
+
+                recordMetricsEvent_sessionTerminated(null);
                 quitSessionNow();
             } catch (InvalidSyntaxException e) {
                 handleResponseGenericProcessError(mCurrentIkeSaRecord, e);
