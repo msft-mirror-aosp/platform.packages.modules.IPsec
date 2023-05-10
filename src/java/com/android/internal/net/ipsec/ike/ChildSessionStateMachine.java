@@ -95,6 +95,7 @@ import com.android.internal.net.ipsec.ike.message.IkeSaPayload.ChildProposal;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.DhGroupTransform;
 import com.android.internal.net.ipsec.ike.message.IkeTsPayload;
 import com.android.internal.net.ipsec.ike.shim.ShimUtils;
+import com.android.internal.net.ipsec.ike.utils.IkeMetricsInterface;
 import com.android.internal.net.ipsec.ike.utils.IpSecSpiGenerator;
 import com.android.internal.net.ipsec.ike.utils.RandomnessFactory;
 import com.android.internal.util.State;
@@ -820,6 +821,11 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                     return NOT_HANDLED;
             }
         }
+
+        @Override
+        protected int getMetricsStateCode() {
+            return IkeMetricsInterface.IKE_SESSION_TERMINATED__IKE_STATE__STATE_CHILD_KILL;
+        }
     }
 
     /**
@@ -1061,6 +1067,11 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
         public void exitState() {
             CreateChildSaHelper.releaseSpiResources(mRequestPayloads);
         }
+
+        @Override
+        protected int getMetricsStateCode() {
+            return IkeMetricsInterface.IKE_SESSION_TERMINATED__IKE_STATE__STATE_CHILD_INITIAL;
+        }
     }
 
     /**
@@ -1144,6 +1155,12 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
             CreateChildSaHelper.releaseSpiResources(mRequestPayloads);
         }
 
+        @Override
+        protected int getMetricsStateCode() {
+            return IkeMetricsInterface
+                    .IKE_SESSION_TERMINATED__IKE_STATE__STATE_CHILD_CREATE_LOCAL_CREATE;
+        }
+
         private boolean isTemporaryFailure(CreateChildResult createChildResult) {
             if (createChildResult.status != CREATE_STATUS_CHILD_ERROR_RCV_NOTIFY) {
                 return false;
@@ -1198,6 +1215,11 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                     return NOT_HANDLED;
             }
         }
+
+        @Override
+        protected int getMetricsStateCode() {
+            return IkeMetricsInterface.IKE_SESSION_TERMINATED__IKE_STATE__STATE_CHILD_IDLE;
+        }
     }
 
     /**
@@ -1214,6 +1236,12 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
         public void maybeNotifyIkeSessionStateMachine() {
             // Do not notify IkeSessionStateMachine because Child Session needs to process the
             // deferred request and start a new procedure
+        }
+
+        @Override
+        protected int getMetricsStateCode() {
+            return IkeMetricsInterface
+                    .IKE_SESSION_TERMINATED__IKE_STATE__STATE_CHILD_IDLE_WITH_DEFERRED_REQUEST;
         }
     }
 
@@ -1238,6 +1266,12 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                 default:
                     return NOT_HANDLED;
             }
+        }
+
+        @Override
+        protected int getMetricsStateCode() {
+            return IkeMetricsInterface
+                    .IKE_SESSION_TERMINATED__IKE_STATE__STATE_CHILD_CLOSE_AND_AWAIT_RESPONSE;
         }
     }
 
@@ -1449,6 +1483,12 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                     return NOT_HANDLED;
             }
         }
+
+        @Override
+        protected int getMetricsStateCode() {
+            return IkeMetricsInterface
+                    .IKE_SESSION_TERMINATED__IKE_STATE__STATE_CHILD_DELETE_LOCAL_DELETE;
+        }
     }
 
     /**
@@ -1469,6 +1509,12 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                 default:
                     return NOT_HANDLED;
             }
+        }
+
+        @Override
+        protected int getMetricsStateCode() {
+            return IkeMetricsInterface
+                    .IKE_SESSION_TERMINATED__IKE_STATE__STATE_CHILD_DELETE_REMOTE_DELETE;
         }
     }
 
@@ -1631,6 +1677,12 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
         public void exitState() {
             CreateChildSaHelper.releaseSpiResources(mRequestPayloads);
         }
+
+        @Override
+        protected int getMetricsStateCode() {
+            return IkeMetricsInterface
+                    .IKE_SESSION_TERMINATED__IKE_STATE__STATE_CHILD_REKEY_LOCAL_CREATE;
+        }
     }
 
     /**
@@ -1674,6 +1726,12 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
             loge("Received error notification for rekey Child. Tear down IKE SA");
             sendDeleteIkeRequest();
             mChildSmCallback.onFatalIkeSessionError(exception);
+        }
+
+        @Override
+        protected int getMetricsStateCode() {
+            return IkeMetricsInterface
+                    .IKE_SESSION_TERMINATED__IKE_STATE__STATE_CHILD_MOBIKE_REKEY_LOCAL_CREATE;
         }
     }
 
@@ -1890,6 +1948,12 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
 
             transitionTo(mIdle);
         }
+
+        @Override
+        protected int getMetricsStateCode() {
+            return IkeMetricsInterface
+                    .IKE_SESSION_TERMINATED__IKE_STATE__STATE_CHILD_REKEY_REMOTE_CREATE;
+        }
     }
 
     /**
@@ -2011,6 +2075,12 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                     return NOT_HANDLED;
             }
         }
+
+        @Override
+        protected int getMetricsStateCode() {
+            return IkeMetricsInterface
+                    .IKE_SESSION_TERMINATED__IKE_STATE__STATE_CHILD_REKEY_LOCAL_DELETE;
+        }
     }
 
     /**
@@ -2091,6 +2161,17 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
         public void exitState() {
             removeMessages(TIMEOUT_REKEY_REMOTE_DELETE);
         }
+
+        @Override
+        protected int getMetricsStateCode() {
+            return IkeMetricsInterface
+                    .IKE_SESSION_TERMINATED__IKE_STATE__STATE_CHILD_REKEY_REMOTE_DELETE;
+        }
+    }
+
+    @Override
+    protected int getMetricsSessionType() {
+        return IkeMetricsInterface.IKE_SESSION_TERMINATED__SESSION_TYPE__SESSION_CHILD;
     }
 
     /**
