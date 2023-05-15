@@ -19,6 +19,8 @@ package com.android.internal.net.ipsec.test.ike.net;
 import static android.net.NetworkCapabilities.TRANSPORT_CELLULAR;
 import static android.net.NetworkCapabilities.TRANSPORT_WIFI;
 import static android.net.ipsec.ike.IkeSessionParams.ESP_ENCAP_TYPE_AUTO;
+import static android.net.ipsec.ike.IkeSessionParams.ESP_ENCAP_TYPE_NONE;
+import static android.net.ipsec.ike.IkeSessionParams.ESP_ENCAP_TYPE_UDP;
 import static android.net.ipsec.ike.IkeSessionParams.ESP_IP_VERSION_AUTO;
 import static android.net.ipsec.ike.IkeSessionParams.ESP_IP_VERSION_IPV4;
 import static android.net.ipsec.ike.IkeSessionParams.ESP_IP_VERSION_IPV6;
@@ -398,8 +400,14 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
         verifySetupAndTeardownWithIpVersionAndPort(false /* isIpv4 */, false /* force4500 */);
     }
 
+    private void verifyIpFamilySelection(int ipVersion, boolean remoteHasV4, boolean remoteHasV6,
+            int expectedIpVersion) throws Exception {
+        verifyIpFamilySelection(ipVersion, ESP_ENCAP_TYPE_AUTO, remoteHasV4, remoteHasV6,
+                expectedIpVersion);
+    }
+
     private void verifyIpFamilySelection(
-            int ipVersion, boolean remoteHasV4, boolean remoteHasV6,
+            int ipVersion, int encapType, boolean remoteHasV4, boolean remoteHasV6,
             int expectedIpVersion) throws Exception {
         mIkeConnectionCtrl.tearDown();
 
@@ -435,6 +443,7 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
         }
 
         when(mMockIkeParams.getIpVersion()).thenReturn(ipVersion);
+        when(mMockIkeParams.getEncapType()).thenReturn(encapType);
 
         mIkeConnectionCtrl = buildIkeConnectionCtrl();
 
@@ -464,6 +473,72 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
 
         mIkeConnectionCtrl.tearDown();
         verify(mMockConnectManager).unregisterNetworkCallback(any(NetworkCallback.class));
+    }
+
+    @Test
+    public void testIpFamilySelectionAutoEncapNoneWithIpV4IpV6Remote() throws Exception {
+        verifyIpFamilySelection(
+                ESP_IP_VERSION_AUTO, ESP_ENCAP_TYPE_NONE,
+                true /* remoteHasV4 */, true /* remoteHasV6 */,
+                ESP_IP_VERSION_IPV6 /* expectedIpVersion */);
+    }
+
+    @Test
+    public void testIpFamilySelectionAutoEncapNoneWithIpV4Remote() throws Exception {
+        try {
+            verifyIpFamilySelection(
+                    ESP_IP_VERSION_AUTO, ESP_ENCAP_TYPE_NONE,
+                    true /* remoteHasV4 */, false /* remoteHasV6 */,
+                    ESP_IP_VERSION_IPV6 /* expectedIpVersion */);
+            fail("IPv6 required but no global IPv6 address available should cause an exception");
+        } catch (IkeIOException | IkeInternalException expected) {
+            if (SdkLevel.isAtLeastT()) {
+                assertTrue(expected instanceof IkeIOException);
+            } else {
+                assertTrue(expected instanceof IkeInternalException);
+            }
+        }
+    }
+
+    @Test
+    public void testIpFamilySelectionAutoEncapNoneWithIpV6Remote() throws Exception {
+        verifyIpFamilySelection(
+                ESP_IP_VERSION_AUTO, ESP_ENCAP_TYPE_NONE,
+                false /* remoteHasV4 */, true /* remoteHasV6 */,
+                ESP_IP_VERSION_IPV6 /* expectedIpVersion */);
+    }
+
+    @Test
+    public void testIpFamilySelectionAutoEncapUdpWithIpV4IpV6Remote() throws Exception {
+        verifyIpFamilySelection(
+                ESP_IP_VERSION_AUTO, ESP_ENCAP_TYPE_UDP,
+                true /* remoteHasV4 */, true /* remoteHasV6 */,
+                ESP_IP_VERSION_IPV4 /* expectedIpVersion */);
+    }
+
+    @Test
+    public void testIpFamilySelectionAutoEncapUdpWithIpV4Remote() throws Exception {
+        verifyIpFamilySelection(
+                ESP_IP_VERSION_AUTO, ESP_ENCAP_TYPE_UDP,
+                true /* remoteHasV4 */, false /* remoteHasV6 */,
+                ESP_IP_VERSION_IPV4 /* expectedIpVersion */);
+    }
+
+    @Test
+    public void testIpFamilySelectionAutoEncapUdpWithIpV6Remote() throws Exception {
+        try {
+            verifyIpFamilySelection(
+                    ESP_IP_VERSION_AUTO, ESP_ENCAP_TYPE_UDP,
+                    false /* remoteHasV4 */, true /* remoteHasV6 */,
+                    ESP_IP_VERSION_IPV4 /* expectedIpVersion */);
+            fail("IPv4 required but no global IPv4 address available should cause an exception");
+        } catch (IkeIOException | IkeInternalException expected) {
+            if (SdkLevel.isAtLeastT()) {
+                assertTrue(expected instanceof IkeIOException);
+            } else {
+                assertTrue(expected instanceof IkeInternalException);
+            }
+        }
     }
 
     @Test

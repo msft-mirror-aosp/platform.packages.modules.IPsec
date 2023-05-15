@@ -19,6 +19,8 @@ package com.android.internal.net.ipsec.ike.net;
 import static android.net.NetworkCapabilities.TRANSPORT_CELLULAR;
 import static android.net.NetworkCapabilities.TRANSPORT_WIFI;
 import static android.net.ipsec.ike.IkeManager.getIkeLog;
+import static android.net.ipsec.ike.IkeSessionParams.ESP_ENCAP_TYPE_NONE;
+import static android.net.ipsec.ike.IkeSessionParams.ESP_ENCAP_TYPE_UDP;
 import static android.net.ipsec.ike.IkeSessionParams.ESP_IP_VERSION_AUTO;
 import static android.net.ipsec.ike.IkeSessionParams.ESP_IP_VERSION_IPV4;
 import static android.net.ipsec.ike.IkeSessionParams.ESP_IP_VERSION_IPV6;
@@ -936,6 +938,8 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
         final boolean canConnectWithIpv6 =
                 !mRemoteAddressesV6.isEmpty() && linkProperties.hasGlobalIpv6Address();
 
+        adjustIpVersionPreference();
+
         if (isIpVersionRequired(ESP_IP_VERSION_IPV4)) {
             if (!canConnectWithIpv4) {
                 throw ShimUtils.getInstance().getDnsFailedException(
@@ -957,6 +961,28 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
         } else {
             // For backwards compatibility, synchronously throw IAE instead of triggering callback.
             throw new IllegalArgumentException("No valid IPv4 or IPv6 addresses for peer");
+        }
+    }
+
+    private void adjustIpVersionPreference() {
+        // As ESP isn't supported on v4 and UDP isn't supported on v6, a request for ENCAP_UDP
+        // should force v4 and a request for ENCAP_NONE should force v6 when the family is set
+        // to auto.
+        // TODO : instead of fudging the arguments here, this should actually be taken into
+        // account when figuring out whether to send the NAT detection packet.
+        int adjustedIpVersion = mIpVersion;
+        if (mIpVersion == ESP_IP_VERSION_AUTO) {
+            if (mEncapType == ESP_ENCAP_TYPE_NONE) {
+                adjustedIpVersion = ESP_IP_VERSION_IPV6;
+            } else if (mEncapType == ESP_ENCAP_TYPE_UDP) {
+                adjustedIpVersion = ESP_IP_VERSION_IPV4;
+            }
+
+            if (adjustedIpVersion != mIpVersion) {
+                getIkeLog().i(TAG, "IP version preference is overridden from "
+                        + mIpVersion  + " to " + adjustedIpVersion);
+                mIpVersion = adjustedIpVersion;
+            }
         }
     }
 
