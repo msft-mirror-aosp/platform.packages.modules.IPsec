@@ -302,6 +302,12 @@ public final class IkeSessionParams {
 
     /**
      * Do not encapsulate ESP packets in transport layer protocol.
+     *
+     * Under this encapsulation type, the IKE Session will send NAT detection only when it is
+     * performing mobility update from an environment with a NAT, as an attempt to stop using
+     * UDP encapsulation for the ESP packets. If IKE Session still detects a NAT in this case,
+     * the IKE Session will be terminated.
+     *
      * @hide
      */
     @SystemApi(client = SystemApi.Client.MODULE_LIBRARIES)
@@ -309,6 +315,11 @@ public final class IkeSessionParams {
 
     /**
      * Encapsulate ESP packets in UDP.
+     *
+     * Under this encapsulation type, the IKE Session will send NAT detection and fake a local
+     * NAT. In this case the IKE Session will always encapsulate ESP packets in UDP as long as
+     * the server also supports NAT traversal.
+     *
      * @hide
      */
     @SystemApi(client = SystemApi.Client.MODULE_LIBRARIES)
@@ -325,13 +336,11 @@ public final class IkeSessionParams {
     public @interface EspEncapType {}
 
     /**
-     * Do not change the keepalive delay from what was previously set.
+     * Automatically choose the keepalive interval.
      *
      * This constant can be passed to
      * {@link com.android.internal.net.ipsec.ike.IkeSessionStateMachine#setNetwork} to signify
-     * that the keepalive delay should not be changed from a previous call to this method, or
-     * if none, what was set from the original IkeSessionParams object.
-     * Note that in the Config object this constant is illegal.
+     * that the keepalive delay should be deduced automatically from the underlying network.
      *
      * @see #getNattKeepAliveDelaySeconds
      * @hide
@@ -1968,6 +1977,11 @@ public final class IkeSessionParams {
         @SystemApi(client = SystemApi.Client.MODULE_LIBRARIES)
         @NonNull
         public Builder setIpVersion(@EspIpVersion int ipVersion) {
+            if (ESP_IP_VERSION_AUTO != ipVersion
+                    && ESP_IP_VERSION_IPV4 != ipVersion
+                    && ESP_IP_VERSION_IPV6 != ipVersion) {
+                throw new IllegalArgumentException("Invalid IP version : " + ipVersion);
+            }
             mIpVersion = ipVersion;
             return this;
         }
@@ -1982,6 +1996,11 @@ public final class IkeSessionParams {
         @SystemApi(client = SystemApi.Client.MODULE_LIBRARIES)
         @NonNull
         public Builder setEncapType(@EspEncapType int encapType) {
+            if (ESP_ENCAP_TYPE_AUTO != encapType
+                    && ESP_ENCAP_TYPE_NONE != encapType
+                    && ESP_ENCAP_TYPE_UDP != encapType) {
+                throw new IllegalArgumentException("Invalid encap type : " + encapType);
+            }
             mEncapType = encapType;
             return this;
         }
@@ -2155,6 +2174,12 @@ public final class IkeSessionParams {
                 throw new IllegalArgumentException(
                         "It is not allowed to use KEY_ID as local ID when local authentication"
                                 + " method is digital-signature-based");
+            }
+
+            if ((mIpVersion == ESP_IP_VERSION_IPV4 && mEncapType == ESP_ENCAP_TYPE_NONE)
+                    || (mIpVersion == ESP_IP_VERSION_IPV6 && mEncapType == ESP_ENCAP_TYPE_UDP)) {
+                throw new UnsupportedOperationException("Sending packets with IPv4 ESP or IPv6 UDP"
+                        + " are not supported");
             }
 
             return new IkeSessionParams(

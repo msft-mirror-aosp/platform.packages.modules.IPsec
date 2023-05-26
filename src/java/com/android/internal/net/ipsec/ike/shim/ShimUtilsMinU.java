@@ -16,6 +16,8 @@
 
 package com.android.internal.net.ipsec.ike.shim;
 
+import android.content.Context;
+import android.content.pm.PackageManager;
 import android.net.Network;
 import android.net.SocketKeepalive;
 
@@ -30,5 +32,16 @@ public class ShimUtilsMinU extends ShimUtilsT {
     public void startKeepalive(SocketKeepalive keepalive, int keepaliveDelaySeconds,
             int keepaliveOptions, Network underpinnedNetwork) {
         keepalive.start(keepaliveDelaySeconds, keepaliveOptions, underpinnedNetwork);
+    }
+
+    @Override
+    public boolean shouldSkipIfSameNetwork(boolean skipIfSameNetwork) {
+        return skipIfSameNetwork;
+    }
+
+    @Override
+    public boolean supportsSameSocketKernelMigration(Context context) {
+        return context.getPackageManager()
+                .hasSystemFeature(PackageManager.FEATURE_IPSEC_TUNNEL_MIGRATION);
     }
 }
