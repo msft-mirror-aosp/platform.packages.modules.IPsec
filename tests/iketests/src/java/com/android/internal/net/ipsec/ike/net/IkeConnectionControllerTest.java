@@ -19,6 +19,8 @@ package com.android.internal.net.ipsec.test.ike.net;
 import static android.net.NetworkCapabilities.TRANSPORT_CELLULAR;
 import static android.net.NetworkCapabilities.TRANSPORT_WIFI;
 import static android.net.ipsec.ike.IkeSessionParams.ESP_ENCAP_TYPE_AUTO;
+import static android.net.ipsec.ike.IkeSessionParams.ESP_ENCAP_TYPE_NONE;
+import static android.net.ipsec.ike.IkeSessionParams.ESP_ENCAP_TYPE_UDP;
 import static android.net.ipsec.ike.IkeSessionParams.ESP_IP_VERSION_AUTO;
 import static android.net.ipsec.ike.IkeSessionParams.ESP_IP_VERSION_IPV4;
 import static android.net.ipsec.ike.IkeSessionParams.ESP_IP_VERSION_IPV6;
@@ -210,12 +212,20 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
         mIkeConnectionCtrl.tearDown();
     }
 
-    private void verifyKeepalive() {
-        boolean isIkeUdpEncapSocket =
-                mIkeConnectionCtrl.getIkeSocket() instanceof IkeUdpEncapSocket;
-        if (isIkeUdpEncapSocket) {
+    private void verifyKeepalive(boolean hasOldKeepalive, boolean isKeepaliveExpected)
+            throws Exception {
+        if (isKeepaliveExpected) {
             assertNotNull(mIkeConnectionCtrl.getIkeNattKeepalive());
+
+            if (hasOldKeepalive) {
+                verify(mMockIkeNattKeepalive).restart(any());
+            } else {
+                verify(mMockConnectionCtrlDeps).newIkeNattKeepalive(any(), any());
+            }
         } else {
+            if (hasOldKeepalive) {
+                verify(mMockIkeNattKeepalive).stop();
+            }
             assertNull(mIkeConnectionCtrl.getIkeNattKeepalive());
         }
     }
@@ -235,7 +245,9 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
         assertEquals(expectedRemoteAddress, mIkeConnectionCtrl.getRemoteAddress());
         assertTrue(socketType.isInstance(mIkeConnectionCtrl.getIkeSocket()));
         assertEquals(NAT_TRAVERSAL_SUPPORT_NOT_CHECKED, mIkeConnectionCtrl.getNatStatus());
-        verifyKeepalive();
+        verifyKeepalive(
+                false /* hasOldKeepalive */,
+                mIkeConnectionCtrl.getIkeSocket() instanceof IkeUdpEncapSocket);
 
         verifySocketBoundToNetwork(mIkeConnectionCtrl.getIkeSocket(), expectedNetwork);
     }
@@ -388,8 +400,14 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
         verifySetupAndTeardownWithIpVersionAndPort(false /* isIpv4 */, false /* force4500 */);
     }
 
+    private void verifyIpFamilySelection(int ipVersion, boolean remoteHasV4, boolean remoteHasV6,
+            int expectedIpVersion) throws Exception {
+        verifyIpFamilySelection(ipVersion, ESP_ENCAP_TYPE_AUTO, remoteHasV4, remoteHasV6,
+                expectedIpVersion);
+    }
+
     private void verifyIpFamilySelection(
-            int ipVersion, boolean remoteHasV4, boolean remoteHasV6,
+            int ipVersion, int encapType, boolean remoteHasV4, boolean remoteHasV6,
             int expectedIpVersion) throws Exception {
         mIkeConnectionCtrl.tearDown();
 
@@ -425,6 +443,7 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
         }
 
         when(mMockIkeParams.getIpVersion()).thenReturn(ipVersion);
+        when(mMockIkeParams.getEncapType()).thenReturn(encapType);
 
         mIkeConnectionCtrl = buildIkeConnectionCtrl();
 
@@ -454,6 +473,72 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
 
         mIkeConnectionCtrl.tearDown();
         verify(mMockConnectManager).unregisterNetworkCallback(any(NetworkCallback.class));
+    }
+
+    @Test
+    public void testIpFamilySelectionAutoEncapNoneWithIpV4IpV6Remote() throws Exception {
+        verifyIpFamilySelection(
+                ESP_IP_VERSION_AUTO, ESP_ENCAP_TYPE_NONE,
+                true /* remoteHasV4 */, true /* remoteHasV6 */,
+                ESP_IP_VERSION_IPV6 /* expectedIpVersion */);
+    }
+
+    @Test
+    public void testIpFamilySelectionAutoEncapNoneWithIpV4Remote() throws Exception {
+        try {
+            verifyIpFamilySelection(
+                    ESP_IP_VERSION_AUTO, ESP_ENCAP_TYPE_NONE,
+                    true /* remoteHasV4 */, false /* remoteHasV6 */,
+                    ESP_IP_VERSION_IPV6 /* expectedIpVersion */);
+            fail("IPv6 required but no global IPv6 address available should cause an exception");
+        } catch (IkeIOException | IkeInternalException expected) {
+            if (SdkLevel.isAtLeastT()) {
+                assertTrue(expected instanceof IkeIOException);
+            } else {
+                assertTrue(expected instanceof IkeInternalException);
+            }
+        }
+    }
+
+    @Test
+    public void testIpFamilySelectionAutoEncapNoneWithIpV6Remote() throws Exception {
+        verifyIpFamilySelection(
+                ESP_IP_VERSION_AUTO, ESP_ENCAP_TYPE_NONE,
+                false /* remoteHasV4 */, true /* remoteHasV6 */,
+                ESP_IP_VERSION_IPV6 /* expectedIpVersion */);
+    }
+
+    @Test
+    public void testIpFamilySelectionAutoEncapUdpWithIpV4IpV6Remote() throws Exception {
+        verifyIpFamilySelection(
+                ESP_IP_VERSION_AUTO, ESP_ENCAP_TYPE_UDP,
+                true /* remoteHasV4 */, true /* remoteHasV6 */,
+                ESP_IP_VERSION_IPV4 /* expectedIpVersion */);
+    }
+
+    @Test
+    public void testIpFamilySelectionAutoEncapUdpWithIpV4Remote() throws Exception {
+        verifyIpFamilySelection(
+                ESP_IP_VERSION_AUTO, ESP_ENCAP_TYPE_UDP,
+                true /* remoteHasV4 */, false /* remoteHasV6 */,
+                ESP_IP_VERSION_IPV4 /* expectedIpVersion */);
+    }
+
+    @Test
+    public void testIpFamilySelectionAutoEncapUdpWithIpV6Remote() throws Exception {
+        try {
+            verifyIpFamilySelection(
+                    ESP_IP_VERSION_AUTO, ESP_ENCAP_TYPE_UDP,
+                    false /* remoteHasV4 */, true /* remoteHasV6 */,
+                    ESP_IP_VERSION_IPV4 /* expectedIpVersion */);
+            fail("IPv4 required but no global IPv4 address available should cause an exception");
+        } catch (IkeIOException | IkeInternalException expected) {
+            if (SdkLevel.isAtLeastT()) {
+                assertTrue(expected instanceof IkeIOException);
+            } else {
+                assertTrue(expected instanceof IkeInternalException);
+            }
+        }
     }
 
     @Test
@@ -777,7 +862,7 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
                 true /* isNatDetected */, IKE_LOCAL_SPI);
 
         assertTrue(mIkeConnectionCtrl.getIkeSocket() instanceof IkeUdpEncapSocket);
-        verifyKeepalive();
+        verifyKeepalive(false /* hasOldKeepalive */, true /* isKeepaliveExpected */);
     }
 
     private IkeDefaultNetworkCallback getDefaultNetworkCallback() throws Exception {
@@ -862,7 +947,7 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
         enableMobilityAndReturnCb(true /* isDefaultNetwork */);
 
         assertTrue(mIkeConnectionCtrl.getIkeSocket() instanceof IkeUdpEncapSocket);
-        verifyKeepalive();
+        verifyKeepalive(false /* hasOldKeepalive */, true /* isKeepaliveExpected */);
     }
 
     @Test
@@ -871,7 +956,7 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
         enableMobilityAndReturnCb(true /* isDefaultNetwork */);
 
         assertTrue(mIkeConnectionCtrl.getIkeSocket() instanceof IkeUdp4Socket);
-        verifyKeepalive();
+        verifyKeepalive(false /* hasOldKeepalive */, false /* isKeepaliveExpected */);
     }
 
     @Test
@@ -879,7 +964,7 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
         mIkeConnectionCtrl.handleNatDetectionResultInMobike(true /* isNatDetected */);
 
         assertTrue(mIkeConnectionCtrl.getIkeSocket() instanceof IkeUdpEncapSocket);
-        verifyKeepalive();
+        verifyKeepalive(false /* hasOldKeepalive */, true /* isKeepaliveExpected */);
     }
 
     private void onNetworkSetByUserWithDefaultParams(
@@ -957,11 +1042,13 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
         mIkeConnectionCtrl = buildIkeConnectionCtrl();
         mIkeConnectionCtrl.setUp();
         mIkeConnectionCtrl.registerIkeSaRecord(mMockIkeSaRecord);
+        boolean hasKeepalivePostSetup = false;
         if (doesPeerSupportNatt) {
             // Either NAT detected or not detected won't affect the test since both cases indicate
             // the server support NAT-T
             mIkeConnectionCtrl.handleNatDetectionResultInIkeInit(
                     true /* isNatDetected */, IKE_LOCAL_SPI);
+            hasKeepalivePostSetup = true;
         } else {
             mIkeConnectionCtrl.markSeverNattUnsupported();
         }
@@ -986,7 +1073,9 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
         verify(mMockConnectionCtrlCb).onUnderlyingNetworkUpdated();
         verify(mMockIkeSaRecord).migrate(UPDATED_LOCAL_ADDRESS_V6, REMOTE_ADDRESS_V6);
         assertTrue(expectedSocketType.isInstance(mIkeConnectionCtrl.getIkeSocket()));
-        verifyKeepalive();
+        verifyKeepalive(
+                hasKeepalivePostSetup,
+                mIkeConnectionCtrl.getIkeSocket() instanceof IkeUdpEncapSocket);
     }
 
     @Test
@@ -1223,5 +1312,19 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
 
         verify(mMockConnectionCtrlCb, never()).onUnderlyingNetworkUpdated();
         verify(mMockConnectionCtrlCb, never()).onUnderlyingNetworkDied(any());
+    }
+
+    @IgnoreAfter(VERSION_CODES.TIRAMISU)
+    @Test
+    public void testOnUnderpinnedNetworkSetByUser() throws Exception {
+        mIkeConnectionCtrl.handleNatDetectionResultInIkeInit(
+                true /* isNatDetected */, IKE_LOCAL_SPI);
+        verifyKeepalive(false /* hasOldKeepalive */, true /* isKeepaliveExpected */);
+        assertTrue(mIkeConnectionCtrl.getIkeSocket() instanceof IkeUdpEncapSocket);
+
+        final Network underpinnedNetwork = mock(Network.class);
+        mIkeConnectionCtrl.onUnderpinnedNetworkSetByUser(underpinnedNetwork);
+        verifyKeepalive(true /* hasOldKeepalive */, true /* isKeepaliveExpected */);
+        assertEquals(underpinnedNetwork, mIkeConnectionCtrl.getUnderpinnedNetwork());
     }
 }
