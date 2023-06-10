@@ -134,7 +134,7 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
     private final boolean mForcePort4500;
     private final boolean mUseCallerConfiguredNetwork;
     private final String mRemoteHostname;
-    private final int mDscp = 0;
+    private final int mDscp;
     private final IkeSessionParams mIkeParams;
     // Must only be touched on the IkeSessionStateMachine thread.
     private IkeAlarmConfig mKeepaliveAlarmConfig;
@@ -195,6 +195,7 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
         mUseCallerConfiguredNetwork = config.ikeParams.getConfiguredNetwork() != null;
         mIpVersion = config.ikeParams.getIpVersion();
         mEncapType = config.ikeParams.getEncapType();
+        mDscp = config.ikeParams.getDscp();
         mUnderpinnedNetwork = null;
 
         if (mUseCallerConfiguredNetwork) {
@@ -682,6 +683,12 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
     /** Check if mobility is enabled */
     public boolean isMobilityEnabled() {
         return mMobilityEnabled;
+    }
+
+    /** Differentiated Services Code Point information used at socket configuration */
+    @VisibleForTesting
+    public int getDscp() {
+        return mDscp;
     }
 
     /**
