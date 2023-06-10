@@ -74,6 +74,7 @@ import com.android.internal.net.TestUtils;
 import com.android.internal.net.ipsec.test.ike.IkeContext;
 import com.android.internal.net.ipsec.test.ike.IkeSessionTestBase;
 import com.android.internal.net.ipsec.test.ike.IkeSocket;
+import com.android.internal.net.ipsec.test.ike.IkeSocketConfig;
 import com.android.internal.net.ipsec.test.ike.IkeUdp4Socket;
 import com.android.internal.net.ipsec.test.ike.IkeUdp6Socket;
 import com.android.internal.net.ipsec.test.ike.IkeUdp6WithEncapPortSocket;
@@ -109,6 +110,8 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
     private static final int FAKE_SESSION_ID = 0;
     private static final int MOCK_ALARM_CMD = 1;
     private static final int MOCK_KEEPALIVE_CMD = 2;
+
+    private static final int DSCP_FIELD = 50;
 
     private static final int KEEPALIVE_DELAY_CALLER_CONFIGURED = 50;
 
@@ -205,6 +208,7 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
         when(mMockIkeParams.getConfiguredNetwork()).thenReturn(null);
         when(mMockIkeParams.getIpVersion()).thenReturn(ESP_IP_VERSION_AUTO);
         when(mMockIkeParams.getEncapType()).thenReturn(ESP_ENCAP_TYPE_AUTO);
+        when(mMockIkeParams.getDscp()).thenReturn(DSCP_FIELD);
     }
 
     @After
@@ -249,7 +253,29 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
                 false /* hasOldKeepalive */,
                 mIkeConnectionCtrl.getIkeSocket() instanceof IkeUdpEncapSocket);
 
+        verifyDscpSetForSocket(socketType);
         verifySocketBoundToNetwork(mIkeConnectionCtrl.getIkeSocket(), expectedNetwork);
+    }
+
+    private void verifyDscpSetForSocket(Class<? extends IkeSocket> socketType) throws Exception {
+        ArgumentCaptor<IkeSocketConfig> socketConfig =
+                ArgumentCaptor.forClass(IkeSocketConfig.class);
+
+        assertEquals(DSCP_FIELD, mIkeConnectionCtrl.getDscp());
+        if (socketType.equals(IkeUdpEncapSocket.class)) {
+            verify(mMockConnectionCtrlDeps)
+                    .newIkeUdpEncapSocket(socketConfig.capture(), any(), any(), any());
+        } else if (socketType.equals(IkeUdp4Socket.class))  {
+            verify(mMockConnectionCtrlDeps)
+                    .newIkeUdp4Socket(socketConfig.capture(), any(), any());
+        } else if (socketType.equals(IkeUdp6WithEncapPortSocket.class)) {
+            verify(mMockConnectionCtrlDeps)
+                    .newIkeUdp6WithEncapPortSocket(socketConfig.capture(), any(), any());
+        } else if (socketType.equals(IkeUdp6Socket.class)) {
+            verify(mMockConnectionCtrlDeps)
+                    .newIkeUdp6Socket(socketConfig.capture(), any(), any());
+        }
+        assertEquals(DSCP_FIELD, socketConfig.getValue().getDscp());
     }
 
     private void resetMockIkeSockets() {
