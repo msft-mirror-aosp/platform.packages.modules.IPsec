@@ -126,12 +126,12 @@ package android.net.ipsec.ike.exceptions {
 package android.net.ipsec.ike.ike3gpp {
 
   public final class Ike3gppBackoffTimer extends android.net.ipsec.ike.ike3gpp.Ike3gppData {
-    ctor public Ike3gppBackoffTimer(byte, int);
-    method public int getBackoffCause();
+    ctor public Ike3gppBackoffTimer(byte, @IntRange(from=0, to=0x3fff) int);
+    method @IntRange(from=0, to=0x3fff) public int getBackoffCause();
     method public byte getBackoffTimer();
     method public int getDataType();
-    field public static final int ERROR_TYPE_NETWORK_FAILURE = 10500; // 0x2904
-    field public static final int ERROR_TYPE_NO_APN_SUBSCRIPTION = 9002; // 0x232a
+    field @Deprecated public static final int ERROR_TYPE_NETWORK_FAILURE = 10500; // 0x2904
+    field @Deprecated public static final int ERROR_TYPE_NO_APN_SUBSCRIPTION = 9002; // 0x232a
   }
 
   public abstract class Ike3gppData {
