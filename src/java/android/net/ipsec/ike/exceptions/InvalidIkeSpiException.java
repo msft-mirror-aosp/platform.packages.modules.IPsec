@@ -18,6 +18,8 @@ package android.net.ipsec.ike.exceptions;
 import android.net.ipsec.ike.ChildSessionCallback;
 import android.net.ipsec.ike.IkeSessionCallback;
 
+import com.android.internal.net.ipsec.ike.utils.IkeMetricsInterface;
+
 /**
  * This exception is thrown if an IKE message was received with an unrecognized destination SPI.
  *
@@ -55,5 +57,16 @@ public final class InvalidIkeSpiException extends IkeProtocolException {
     @Override
     protected boolean isValidDataLength(int dataLen) {
         return EXPECTED_ERROR_DATA_LEN == dataLen;
+    }
+
+    /**
+     * Returns the error code for metrics
+     *
+     * @hide
+     */
+    @Override
+    public int getMetricsErrorCode() {
+        return IkeMetricsInterface
+                .IKE_SESSION_TERMINATED__IKE_ERROR__ERROR_PROTOCOL_INVALID_IKE_SPI;
     }
 }
