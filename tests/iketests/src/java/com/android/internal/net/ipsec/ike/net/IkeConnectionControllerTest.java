@@ -607,15 +607,39 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
     private void verifyIsIpV4Preferred(
             boolean isAutoSelectionEnabled,
             int transportType,
-            boolean expected) throws Exception {
+            int originalIpVersion,
+            int updatedIpVersionOrMinusOne,
+            boolean expected)
+            throws Exception {
+        mIkeConnectionCtrl = buildIkeConnectionCtrl();
+        mIkeConnectionCtrl.setUp();
+        mIkeConnectionCtrl.enableMobility();
         final IkeSessionParams mockIkeParams = mock(IkeSessionParams.class);
         final NetworkCapabilities mockNc = mock(NetworkCapabilities.class);
         doReturn(isAutoSelectionEnabled).when(mockIkeParams)
                 .hasIkeOption(IKE_OPTION_AUTOMATIC_ADDRESS_FAMILY_SELECTION);
-        doReturn(ESP_IP_VERSION_AUTO).when(mockIkeParams).getIpVersion();
+        doReturn(originalIpVersion).when(mockIkeParams).getIpVersion();
         doReturn(true).when(mockNc).hasTransport(transportType);
 
-        assertEquals(expected, IkeConnectionController.isIpV4Preferred(mockIkeParams, mockNc));
+        if (updatedIpVersionOrMinusOne != -1) {
+            final Network n = new Network(100);
+            doReturn(mMockNetworkCapabilities).when(mMockConnectManager).getNetworkCapabilities(n);
+            doReturn(new LinkProperties()).when(mMockConnectManager).getLinkProperties(n);
+            mIkeConnectionCtrl.onNetworkSetByUser(
+                    new Network(100),
+                    updatedIpVersionOrMinusOne,
+                    ESP_ENCAP_TYPE_AUTO,
+                    300 /* keepaliveDelaySeconds */);
+        }
+
+        assertEquals(expected, mIkeConnectionCtrl.isIpV4Preferred(mockIkeParams, mockNc));
+        mIkeConnectionCtrl.tearDown();
+    }
+
+    private void verifyIsIpV4Preferred(
+            boolean isAutoSelectionEnabled, int transportType, boolean expected) throws Exception {
+        verifyIsIpV4Preferred(
+                isAutoSelectionEnabled, transportType, ESP_IP_VERSION_AUTO, -1, expected);
     }
 
     @Test
@@ -636,6 +660,78 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
     @Test
     public void testIsIpV4Preferred_NotAuto_Cell() throws Exception {
         verifyIsIpV4Preferred(false /* autoEnabled */, TRANSPORT_CELLULAR, false /* expected */);
+    }
+
+    private void verifyIsIpV4Preferred(
+            int transportType,
+            int originalIpVersion,
+            int updatedIpVersionOrMinusOne,
+            boolean expected)
+            throws Exception {
+        verifyIsIpV4Preferred(
+                true /* isAutoSelectionEnabled */,
+                transportType,
+                originalIpVersion,
+                updatedIpVersionOrMinusOne,
+                expected);
+    }
+
+    @Test
+    public void testIsIpV4Preferred_AutoToAuto_Wifi() throws Exception {
+        verifyIsIpV4Preferred(
+                TRANSPORT_WIFI, ESP_IP_VERSION_AUTO, ESP_IP_VERSION_AUTO, true /* expected */);
+    }
+
+    @Test
+    public void testIsIpV4Preferred_AutoToAuto_Cell() throws Exception {
+        verifyIsIpV4Preferred(
+                TRANSPORT_CELLULAR, ESP_IP_VERSION_AUTO, ESP_IP_VERSION_AUTO, false /* expected */);
+    }
+
+    @Test
+    public void testIsIpV4Preferred_AutoToV4() throws Exception {
+        verifyIsIpV4Preferred(
+                TRANSPORT_WIFI, ESP_IP_VERSION_AUTO, ESP_IP_VERSION_IPV4, true /* expected */);
+    }
+
+    @Test
+    public void testIsIpV4Preferred_AutoToV6() throws Exception {
+        // TODO (b/289736716) : this should be false, because the new preference is v6
+        verifyIsIpV4Preferred(
+                TRANSPORT_WIFI, ESP_IP_VERSION_AUTO, ESP_IP_VERSION_IPV6, true /* expected */);
+    }
+
+    @Test
+    public void testIsIpV4Preferred_V6ToVAuto() throws Exception {
+        // TODO (b/289736716) : this should be true, because the new preference is auto on wifi
+        verifyIsIpV4Preferred(
+                TRANSPORT_WIFI, ESP_IP_VERSION_IPV6, ESP_IP_VERSION_AUTO, false /* expected */);
+    }
+
+    @Test
+    public void testIsIpV4Preferred_V4ToV4() throws Exception {
+        // TODO (b/289736716) : this should be true, because the new preference is v4
+        verifyIsIpV4Preferred(
+                TRANSPORT_WIFI, ESP_IP_VERSION_IPV4, ESP_IP_VERSION_IPV4, false /* expected */);
+    }
+
+    @Test
+    public void testIsIpV4Preferred_V4ToV6() throws Exception {
+        verifyIsIpV4Preferred(
+                TRANSPORT_WIFI, ESP_IP_VERSION_IPV4, ESP_IP_VERSION_IPV6, false /* expected */);
+    }
+
+    @Test
+    public void testIsIpV4Preferred_V6ToV4() throws Exception {
+        // TODO (b/289736716) : this should be true, because the new preference is v4
+        verifyIsIpV4Preferred(
+                TRANSPORT_WIFI, ESP_IP_VERSION_IPV6, ESP_IP_VERSION_IPV4, false /* expected */);
+    }
+
+    @Test
+    public void testIsIpV4Preferred_V6ToV6() throws Exception {
+        verifyIsIpV4Preferred(
+                TRANSPORT_WIFI, ESP_IP_VERSION_IPV6, ESP_IP_VERSION_IPV6, false /* expected */);
     }
 
     private void verifyUsedIpVersion(
@@ -675,8 +771,9 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
         assertEquals(expectedIpVersion, result);
 
         if (ESP_IP_VERSION_AUTO == requiredIpVersion) {
-            verify(mMockIkeParams).hasIkeOption(IKE_OPTION_AUTOMATIC_ADDRESS_FAMILY_SELECTION);
-            if (isAutoSelectionEnabled) verify(mockNc).hasTransport(TRANSPORT_WIFI);
+            verify(mMockIkeParams, atLeastOnce())
+                    .hasIkeOption(IKE_OPTION_AUTOMATIC_ADDRESS_FAMILY_SELECTION);
+            if (isAutoSelectionEnabled) verify(mockNc, atLeastOnce()).hasTransport(TRANSPORT_WIFI);
         } else {
             verify(mMockIkeParams, never())
                     .hasIkeOption(IKE_OPTION_AUTOMATIC_ADDRESS_FAMILY_SELECTION);
