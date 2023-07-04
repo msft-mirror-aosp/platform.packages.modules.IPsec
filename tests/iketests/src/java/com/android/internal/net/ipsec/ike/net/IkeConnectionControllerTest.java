@@ -722,23 +722,20 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
 
     @Test
     public void testIsIpV4Preferred_AutoToV6() throws Exception {
-        // TODO (b/289736716) : this should be false, because the new preference is v6
         verifyIsIpV4Preferred(
-                TRANSPORT_WIFI, ESP_IP_VERSION_AUTO, ESP_IP_VERSION_IPV6, true /* expected */);
+                TRANSPORT_WIFI, ESP_IP_VERSION_AUTO, ESP_IP_VERSION_IPV6, false /* expected */);
     }
 
     @Test
     public void testIsIpV4Preferred_V6ToVAuto() throws Exception {
-        // TODO (b/289736716) : this should be true, because the new preference is auto on wifi
         verifyIsIpV4Preferred(
-                TRANSPORT_WIFI, ESP_IP_VERSION_IPV6, ESP_IP_VERSION_AUTO, false /* expected */);
+                TRANSPORT_WIFI, ESP_IP_VERSION_IPV6, ESP_IP_VERSION_AUTO, true /* expected */);
     }
 
     @Test
     public void testIsIpV4Preferred_V4ToV4() throws Exception {
-        // TODO (b/289736716) : this should be true, because the new preference is v4
         verifyIsIpV4Preferred(
-                TRANSPORT_WIFI, ESP_IP_VERSION_IPV4, ESP_IP_VERSION_IPV4, false /* expected */);
+                TRANSPORT_WIFI, ESP_IP_VERSION_IPV4, ESP_IP_VERSION_IPV4, true /* expected */);
     }
 
     @Test
@@ -749,9 +746,8 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
 
     @Test
     public void testIsIpV4Preferred_V6ToV4() throws Exception {
-        // TODO (b/289736716) : this should be true, because the new preference is v4
         verifyIsIpV4Preferred(
-                TRANSPORT_WIFI, ESP_IP_VERSION_IPV6, ESP_IP_VERSION_IPV4, false /* expected */);
+                TRANSPORT_WIFI, ESP_IP_VERSION_IPV6, ESP_IP_VERSION_IPV4, true /* expected */);
     }
 
     @Test
@@ -765,7 +761,8 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
             boolean isAutoSelectionEnabled,
             int transportType,
             boolean v4Available,
-            int expectedIpVersion) throws Exception {
+            int expectedIpVersion)
+            throws Exception {
         mMockIkeParams = mock(IkeSessionParams.class);
         final NetworkCapabilities mockNc = mock(NetworkCapabilities.class);
 
