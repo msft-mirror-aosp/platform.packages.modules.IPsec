@@ -991,8 +991,12 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
     }
 
     @VisibleForTesting
-    public static boolean isIpV4Preferred(IkeSessionParams ikeParams, NetworkCapabilities nc) {
-        return ikeParams.getIpVersion() == ESP_IP_VERSION_AUTO
+    public boolean isIpV4Preferred(IkeSessionParams ikeParams, NetworkCapabilities nc) {
+        // Note that in production code mIpVersion can't be == ESP_IP_VERSION_IPV4 because the
+        // only caller, selectAndSetRemoteAddress, would never call this method because
+        // isIpVersionRequired(ESP_IP_VERSION_IPV4) would return true. Still, it makes sense in
+        // this method to accept ESP_IP_VERSION_IPV4.
+        return (mIpVersion == ESP_IP_VERSION_AUTO || mIpVersion == ESP_IP_VERSION_IPV4)
                 && ikeParams.hasIkeOption(IKE_OPTION_AUTOMATIC_ADDRESS_FAMILY_SELECTION)
                 && nc.hasTransport(TRANSPORT_WIFI);
     }
