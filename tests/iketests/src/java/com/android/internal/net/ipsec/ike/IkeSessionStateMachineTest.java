@@ -6112,15 +6112,25 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
     @Test
     public void testIkeAuthWithBackoffTimerNetworkError() throws Exception {
-        verifyIkeAuthWithBackoffTimer(ERROR_TYPE_NETWORK_FAILURE);
+        verifyIkeAuthWithBackoffTimer(
+                ERROR_TYPE_NETWORK_FAILURE, UnrecognizedIkeProtocolException.class);
     }
 
     @Test
     public void testIkeAuthWithBackoffTimerNoApnSubscription() throws Exception {
-        verifyIkeAuthWithBackoffTimer(ERROR_TYPE_NO_APN_SUBSCRIPTION);
+        verifyIkeAuthWithBackoffTimer(
+                ERROR_TYPE_NO_APN_SUBSCRIPTION, UnrecognizedIkeProtocolException.class);
     }
 
-    private void verifyIkeAuthWithBackoffTimer(int expectedNotifyErrorCause) throws Exception {
+    @Test
+    public void testIkeAuthWithBackoffTimerAuthenticationFailed() throws Exception {
+        verifyIkeAuthWithBackoffTimer(
+                ERROR_TYPE_AUTHENTICATION_FAILED, AuthenticationFailedException.class);
+    }
+
+    private void verifyIkeAuthWithBackoffTimer(
+            int expectedNotifyErrorCause, Class<? extends IkeProtocolException> exceptionType)
+            throws Exception {
         // Quit and restart IKE Session with N1 Mode Capability params
         mIkeSessionStateMachine.quitNow();
         mIkeSessionStateMachine =
@@ -6140,11 +6150,19 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
         // Verify IKE Session is closed properly
         assertNull(mIkeSessionStateMachine.getCurrentState());
-        verify(mMockIkeSessionCallback)
-                .onClosedWithException(any(UnrecognizedIkeProtocolException.class));
+
+        // This exception is mapped to metrics error code:
+        int expectedError = expectedNotifyErrorCause;
+        if (expectedError == ERROR_TYPE_AUTHENTICATION_FAILED) {
+            expectedError =
+                    IkeMetricsInterface
+                            .IKE_SESSION_TERMINATED__IKE_ERROR__ERROR_PROTOCOL_AUTHENTICATION_FAILED;
+        }
+
+        verify(mMockIkeSessionCallback).onClosedWithException(any(exceptionType));
+
         verifyIkeMetricsLogged(
-                getStateCode(mIkeSessionStateMachine.mCreateIkeLocalIkeAuth),
-                expectedNotifyErrorCause);
+                getStateCode(mIkeSessionStateMachine.mCreateIkeLocalIkeAuth), expectedError);
 
         verifyBackoffTimer(expectedNotifyErrorCause);
     }
