@@ -57,6 +57,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import android.annotation.Nullable;
 import android.net.ConnectivityManager.NetworkCallback;
 import android.net.LinkAddress;
 import android.net.LinkProperties;
@@ -634,7 +635,7 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
             boolean isAutoSelectionEnabled,
             int transportType,
             int originalIpVersion,
-            int updatedIpVersionOrMinusOne,
+            @Nullable Integer updatedIpVersion,
             boolean expected)
             throws Exception {
         mIkeConnectionCtrl = buildIkeConnectionCtrl();
@@ -647,13 +648,13 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
         doReturn(originalIpVersion).when(mockIkeParams).getIpVersion();
         doReturn(true).when(mockNc).hasTransport(transportType);
 
-        if (updatedIpVersionOrMinusOne != -1) {
+        if (updatedIpVersion != null) {
             final Network n = new Network(100);
             doReturn(mMockNetworkCapabilities).when(mMockConnectManager).getNetworkCapabilities(n);
             doReturn(new LinkProperties()).when(mMockConnectManager).getLinkProperties(n);
             mIkeConnectionCtrl.onNetworkSetByUser(
                     new Network(100),
-                    updatedIpVersionOrMinusOne,
+                    updatedIpVersion,
                     ESP_ENCAP_TYPE_AUTO,
                     300 /* keepaliveDelaySeconds */);
         }
@@ -665,7 +666,7 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
     private void verifyIsIpV4Preferred(
             boolean isAutoSelectionEnabled, int transportType, boolean expected) throws Exception {
         verifyIsIpV4Preferred(
-                isAutoSelectionEnabled, transportType, ESP_IP_VERSION_AUTO, -1, expected);
+                isAutoSelectionEnabled, transportType, ESP_IP_VERSION_AUTO, null, expected);
     }
 
     @Test
@@ -689,16 +690,13 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
     }
 
     private void verifyIsIpV4Preferred(
-            int transportType,
-            int originalIpVersion,
-            int updatedIpVersionOrMinusOne,
-            boolean expected)
+            int transportType, int originalIpVersion, int updatedIpVersion, boolean expected)
             throws Exception {
         verifyIsIpV4Preferred(
                 true /* isAutoSelectionEnabled */,
                 transportType,
                 originalIpVersion,
-                updatedIpVersionOrMinusOne,
+                updatedIpVersion,
                 expected);
     }
 
