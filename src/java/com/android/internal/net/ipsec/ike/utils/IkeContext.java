@@ -16,13 +16,25 @@
 package com.android.internal.net.ipsec.ike;
 
 import android.content.Context;
+import android.content.pm.PackageManager;
+import android.net.ipsec.ike.IkeSession;
 import android.os.Looper;
 
 import com.android.internal.net.eap.EapAuthenticator;
+import com.android.internal.net.ipsec.ike.utils.IkeMetricsInterface;
 import com.android.internal.net.ipsec.ike.utils.RandomnessFactory;
+import com.android.internal.net.utils.IkeDeviceConfigUtils;
 
 /** IkeContext contains all context information of an IKE Session */
 public class IkeContext implements EapAuthenticator.EapContext {
+    private static final String NAMESPACE_IPSEC = "ipsec";
+
+    public static final String CONFIG_AUTO_ADDRESS_FAMILY_SELECTION_CELLULAR_PREFER_IPV4 =
+            "config_auto_address_family_selection_cellular_prefer_ipv4";
+    public static final String CONFIG_AUTO_NATT_KEEPALIVES_CELLULAR_TIMEOUT_OVERRIDE_SECONDS =
+            "config_auto_natt_keepalives_cellular_timeout_override_seconds";
+
+    private final int mIkeCaller;
     private final Looper mLooper;
     private final Context mContext;
     private final RandomnessFactory mRandomFactory;
@@ -32,6 +44,31 @@ public class IkeContext implements EapAuthenticator.EapContext {
         mLooper = looper;
         mContext = context;
         mRandomFactory = randomFactory;
+
+        mIkeCaller = getIkeCaller(mContext);
+    }
+
+    private static int getIkeCaller(Context context) {
+        if (PackageManager.PERMISSION_GRANTED
+                != context.checkSelfPermission(android.Manifest.permission.NETWORK_FACTORY)) {
+            // Only track metrics from system callers for now
+            return IkeMetricsInterface.IKE_SESSION_TERMINATED__IKE_CALLER__CALLER_UNKNOWN;
+        }
+
+        final String attributionTag = context.getAttributionTag();
+        if (IkeSession.CONTEXT_ATTRIBUTION_TAG_IWLAN.equals(attributionTag)) {
+            return IkeMetricsInterface.IKE_SESSION_TERMINATED__IKE_CALLER__CALLER_IWLAN;
+        } else if (IkeSession.CONTEXT_ATTRIBUTION_TAG_VCN.equals(attributionTag)) {
+            return IkeMetricsInterface.IKE_SESSION_TERMINATED__IKE_CALLER__CALLER_VCN;
+        } else if (IkeSession.CONTEXT_ATTRIBUTION_TAG_VPN.equals(attributionTag)) {
+            return IkeMetricsInterface.IKE_SESSION_TERMINATED__IKE_CALLER__CALLER_VPN;
+        } else {
+            return IkeMetricsInterface.IKE_SESSION_TERMINATED__IKE_CALLER__CALLER_UNKNOWN;
+        }
+    }
+
+    public int getIkeCaller() {
+        return mIkeCaller;
     }
 
     /** Gets the Looper */
@@ -50,5 +87,30 @@ public class IkeContext implements EapAuthenticator.EapContext {
     @Override
     public RandomnessFactory getRandomnessFactory() {
         return mRandomFactory;
+    }
+
+    /** Looks up the value of an integer property for IPsec module from DeviceConfig */
+    public int getDeviceConfigPropertyInt(
+            String name, int minimumValue, int maximumValue, int defaultValue) {
+        if (!hasReadDeviceConfigPermission()) {
+            return defaultValue;
+        }
+
+        return IkeDeviceConfigUtils.getDeviceConfigPropertyInt(
+                NAMESPACE_IPSEC, name, minimumValue, maximumValue, defaultValue);
+    }
+
+    /** Looks up the value of a boolean property for IPsec module from DeviceConfig */
+    public boolean getDeviceConfigPropertyBoolean(String name, boolean defaultValue) {
+        if (!hasReadDeviceConfigPermission()) {
+            return defaultValue;
+        }
+        return IkeDeviceConfigUtils.getDeviceConfigPropertyBoolean(
+                NAMESPACE_IPSEC, name, defaultValue);
+    }
+
+    private boolean hasReadDeviceConfigPermission() {
+        return mContext.checkSelfPermission(android.Manifest.permission.READ_DEVICE_CONFIG)
+                == PackageManager.PERMISSION_GRANTED;
     }
 }

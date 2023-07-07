@@ -16,6 +16,9 @@
 
 package com.android.internal.net.ipsec.ike.shim;
 
+import static android.net.ipsec.ike.IkeManager.getIkeLog;
+import static android.net.ipsec.ike.exceptions.IkeException.wrapAsIkeException;
+
 import android.net.Network;
 import android.net.ipsec.ike.exceptions.IkeException;
 import android.net.ipsec.ike.exceptions.IkeIOException;
@@ -23,13 +26,15 @@ import android.net.ipsec.ike.exceptions.IkeInternalException;
 import android.net.ipsec.ike.exceptions.IkeNetworkLostException;
 import android.net.ipsec.ike.exceptions.IkeTimeoutException;
 
+import com.android.internal.net.ipsec.ike.net.IkeConnectionController;
+
 import java.io.IOException;
 import java.net.UnknownHostException;
 
-/** Shim utilities for SDK T and above */
-public class ShimUtilsMinT extends ShimUtils {
+/** Shim utilities for SDK T */
+public class ShimUtilsT extends ShimUtilsRAndS {
     // Package protected constructor for ShimUtils to access
-    ShimUtilsMinT() {
+    ShimUtilsT() {
         super();
     }
 
@@ -60,5 +65,18 @@ public class ShimUtilsMinT extends ShimUtils {
     public void onUnderlyingNetworkDiedWithoutMobility(
             IIkeSessionStateMachineShim ikeSession, Network network) {
         ikeSession.onFatalError(new IkeNetworkLostException(network));
+    }
+
+    @Override
+    public void executeOrSendFatalError(Runnable r, IkeConnectionController.Callback cb) {
+        try {
+            r.run();
+        } catch (Exception e) {
+            getIkeLog().wtf("IkeConnectionController", "Unexpected exception");
+
+            // An unexpected exception is an unrecoverable error to IKE Session. Thus fire onError
+            // to notify the IkeSessionStateMachine of this fatal issue.
+            cb.onError(wrapAsIkeException(e));
+        }
     }
 }
