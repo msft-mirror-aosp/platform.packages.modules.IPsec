@@ -22,31 +22,34 @@ import static org.junit.Assert.assertTrue;
 
 import android.net.ipsec.test.ike.exceptions.IkeProtocolException;
 
+import com.android.internal.net.ipsec.test.ike.message.IkeNotifyPayload;
+
 import org.junit.Test;
 
 public class Ike3gppBackoffTimerTest {
     private static final byte BACKOFF_TIMER = (byte) 0xAF;
-    private static final int BACKOFF_CAUSE = Ike3gppBackoffTimer.ERROR_TYPE_NETWORK_FAILURE;
+    private static final int NOTIFY_ERROR_TYPE_INVALID_VALUE = 16384;
 
     @Test
     public void testIke3gppBackoffTimer() {
-        Ike3gppBackoffTimer backoffTimer = new Ike3gppBackoffTimer(BACKOFF_TIMER, BACKOFF_CAUSE);
+        Ike3gppBackoffTimer backoffTimer =
+                new Ike3gppBackoffTimer(
+                        BACKOFF_TIMER, IkeProtocolException.ERROR_TYPE_AUTHENTICATION_FAILED);
 
         assertEquals(Ike3gppData.DATA_TYPE_NOTIFY_BACKOFF_TIMER, backoffTimer.getDataType());
         assertEquals(BACKOFF_TIMER, backoffTimer.getBackoffTimer());
-        assertEquals(BACKOFF_CAUSE, backoffTimer.getBackoffCause());
+        assertEquals(
+                IkeProtocolException.ERROR_TYPE_AUTHENTICATION_FAILED,
+                backoffTimer.getBackoffCause());
     }
 
     @Test
     public void testIsValidErrorNotifyCause() {
-        assertTrue(
-                Ike3gppBackoffTimer.isValidErrorNotifyCause(
-                        Ike3gppBackoffTimer.ERROR_TYPE_NO_APN_SUBSCRIPTION));
-        assertTrue(
-                Ike3gppBackoffTimer.isValidErrorNotifyCause(
-                        Ike3gppBackoffTimer.ERROR_TYPE_NETWORK_FAILURE));
-        assertFalse(
-                Ike3gppBackoffTimer.isValidErrorNotifyCause(
-                        IkeProtocolException.ERROR_TYPE_AUTHENTICATION_FAILED));
+        IkeNotifyPayload notifyPayload =
+                new IkeNotifyPayload(IkeProtocolException.ERROR_TYPE_AUTHENTICATION_FAILED);
+        assertTrue(Ike3gppBackoffTimer.isValidErrorNotifyCause(notifyPayload));
+
+        notifyPayload = new IkeNotifyPayload(NOTIFY_ERROR_TYPE_INVALID_VALUE);
+        assertFalse(Ike3gppBackoffTimer.isValidErrorNotifyCause(notifyPayload));
     }
 }
