@@ -69,9 +69,11 @@ import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import android.content.Context;
+import android.content.pm.PackageManager;
 import android.net.InetAddresses;
 import android.net.IpSecManager;
 import android.net.IpSecManager.UdpEncapsulationSocket;
@@ -91,6 +93,7 @@ import android.net.ipsec.test.ike.exceptions.InvalidKeException;
 import android.net.ipsec.test.ike.exceptions.InvalidSyntaxException;
 import android.net.ipsec.test.ike.exceptions.NoAdditionalSasException;
 import android.net.ipsec.test.ike.exceptions.NoValidProposalChosenException;
+import android.os.Build;
 import android.os.Handler;
 import android.os.Message;
 import android.os.test.TestLooper;
@@ -126,19 +129,25 @@ import com.android.internal.net.ipsec.test.ike.message.IkeSaPayload.PrfTransform
 import com.android.internal.net.ipsec.test.ike.message.IkeTestUtils;
 import com.android.internal.net.ipsec.test.ike.message.IkeTsPayload;
 import com.android.internal.net.ipsec.test.ike.testutils.MockIpSecTestUtils;
+import com.android.internal.net.ipsec.test.ike.utils.IState;
+import com.android.internal.net.ipsec.test.ike.utils.IkeMetricsInterface;
 import com.android.internal.net.ipsec.test.ike.utils.IpSecSpiGenerator;
 import com.android.internal.net.ipsec.test.ike.utils.RandomnessFactory;
 import com.android.internal.net.utils.test.Log;
 import com.android.server.IpSecService;
+import com.android.testutils.DevSdkIgnoreRule;
+import com.android.testutils.DevSdkIgnoreRule.IgnoreUpTo;
 
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Ignore;
+import org.junit.Rule;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 
 import java.net.Inet4Address;
+import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.security.GeneralSecurityException;
 import java.util.ArrayList;
@@ -146,8 +155,10 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.Executor;
 
-public final class ChildSessionStateMachineTest {
+public final class ChildSessionStateMachineTest extends IkeSessionTestBase {
     private static final String TAG = "ChildSessionStateMachineTest";
+
+    @Rule public final DevSdkIgnoreRule ignoreRule = new DevSdkIgnoreRule();
 
     private static final Inet4Address LOCAL_ADDRESS =
             (Inet4Address) InetAddresses.parseNumericAddress("192.0.2.200");
@@ -157,6 +168,10 @@ public final class ChildSessionStateMachineTest {
             (Inet4Address) InetAddresses.parseNumericAddress("192.0.2.100");
     private static final Inet4Address INTERNAL_ADDRESS =
             (Inet4Address) InetAddresses.parseNumericAddress("203.0.113.100");
+    private static final Inet6Address LOCAL_ADDRESS_6 =
+            (Inet6Address) InetAddresses.parseNumericAddress("2001:db8::1");
+    private static final Inet6Address REMOTE_ADDRESS_6 =
+            (Inet6Address) InetAddresses.parseNumericAddress("2001:db8::2");
 
     private static final int IPV4_PREFIX_LEN = 32;
 
@@ -194,6 +209,7 @@ public final class ChildSessionStateMachineTest {
 
     private Context mContext;
     private Handler mMockIkeHandler;
+    private PackageManager mMockPackageManager;
     private IpSecService mMockIpSecService;
     private IpSecManager mMockIpSecManager;
     private UdpEncapsulationSocket mMockUdpEncapSocket;
@@ -252,10 +268,13 @@ public final class ChildSessionStateMachineTest {
 
         mIkePrf = IkeMacPrf.create(new PrfTransform(SaProposal.PSEUDORANDOM_FUNCTION_HMAC_SHA1));
 
-        mContext = InstrumentationRegistry.getContext();
+        mContext = spy(InstrumentationRegistry.getContext());
         mMockIkeHandler = mock(Handler.class);
         when(mMockIkeHandler.obtainMessage(anyInt(), anyInt(), anyInt(), any()))
                 .thenReturn(mock(Message.class));
+
+        mMockPackageManager = mock(PackageManager.class);
+        doReturn(mMockPackageManager).when(mContext).getPackageManager();
 
         mMockIpSecService = mock(IpSecService.class);
         mMockIpSecManager = new IpSecManager(mContext, mMockIpSecService);
@@ -414,7 +433,13 @@ public final class ChildSessionStateMachineTest {
             int respSpi,
             boolean isLocalInit) {
         verifyChildSaRecordConfig(
-                childSaRecordConfig, initSpi, respSpi, isLocalInit, LOCAL_ADDRESS, REMOTE_ADDRESS);
+                childSaRecordConfig,
+                initSpi,
+                respSpi,
+                isLocalInit,
+                LOCAL_ADDRESS,
+                REMOTE_ADDRESS,
+                mMockUdpEncapSocket);
     }
 
     private void verifyChildSaRecordConfig(
@@ -423,7 +448,8 @@ public final class ChildSessionStateMachineTest {
             int respSpi,
             boolean isLocalInit,
             InetAddress localAddress,
-            InetAddress remoteAddress) {
+            InetAddress remoteAddress,
+            UdpEncapsulationSocket newEncapSocket) {
         assertEquals(mContext, childSaRecordConfig.context);
         assertEquals(initSpi, childSaRecordConfig.initSpi.getSpi());
         assertEquals(respSpi, childSaRecordConfig.respSpi.getSpi());
@@ -436,7 +462,7 @@ public final class ChildSessionStateMachineTest {
             assertEquals(localAddress, childSaRecordConfig.respAddress);
         }
 
-        assertEquals(mMockUdpEncapSocket, childSaRecordConfig.udpEncapSocket);
+        assertEquals(newEncapSocket, childSaRecordConfig.udpEncapSocket);
         assertEquals(mIkePrf, childSaRecordConfig.ikePrf);
         assertArrayEquals(SK_D, childSaRecordConfig.skD);
         assertFalse(childSaRecordConfig.isTransport);
@@ -662,12 +688,21 @@ public final class ChildSessionStateMachineTest {
         verify(mMockChildSessionCallback).onOpened(any(ChildSessionConfiguration.class));
     }
 
-    private <T extends IkeException> void verifyHandleFatalErrorAndQuit(Class<T> exceptionClass) {
+    private void verifyChildMetricsLogged(int stateCode, int exceptionCode) {
+        verifyMetricsLogged(
+                IkeMetricsInterface.IKE_SESSION_TERMINATED__SESSION_TYPE__SESSION_CHILD,
+                stateCode,
+                exceptionCode);
+    }
+
+    private <T extends IkeException> void verifyHandleFatalErrorAndQuit(
+            IState state, Class<T> exceptionClass, int metricsExceptionType) {
         assertNull(mChildSessionStateMachine.getCurrentState());
         verify(mMockChildSessionSmCallback).onProcedureFinished(mChildSessionStateMachine);
         verify(mMockChildSessionSmCallback).onChildSessionClosed(mMockChildSessionCallback);
 
         verify(mMockChildSessionCallback).onClosedWithException(any(exceptionClass));
+        verifyChildMetricsLogged(getStateCode(state), metricsExceptionType);
     }
 
     private void createChildSessionAndReceiveErrorNotification(int notifyType) throws Exception {
@@ -693,7 +728,11 @@ public final class ChildSessionStateMachineTest {
                 .onChildSaCreated(anyInt(), eq(mChildSessionStateMachine));
 
         // Verify user was notified and state machine has quit.
-        verifyHandleFatalErrorAndQuit(NoValidProposalChosenException.class);
+        verifyHandleFatalErrorAndQuit(
+                mChildSessionStateMachine.mCreateChildLocalCreate,
+                NoValidProposalChosenException.class,
+                IkeMetricsInterface
+                        .IKE_SESSION_TERMINATED__IKE_ERROR__ERROR_PROTOCOL_NO_PROPOSAL_CHOSEN);
     }
 
     @Test
@@ -739,7 +778,11 @@ public final class ChildSessionStateMachineTest {
         verify(mMockChildSessionSmCallback).onChildSaDeleted(CURRENT_CHILD_SA_SPI_OUT);
 
         // Verify user was notified and state machine has quit.
-        verifyHandleFatalErrorAndQuit(InvalidSyntaxException.class);
+        verifyHandleFatalErrorAndQuit(
+                mChildSessionStateMachine.mCreateChildLocalCreate,
+                InvalidSyntaxException.class,
+                IkeMetricsInterface
+                        .IKE_SESSION_TERMINATED__IKE_ERROR__ERROR_PROTOCOL_INVALID_SYNTAX);
     }
 
     @Test
@@ -763,7 +806,10 @@ public final class ChildSessionStateMachineTest {
         verify(mMockChildSessionSmCallback).onChildSaDeleted(CURRENT_CHILD_SA_SPI_OUT);
 
         // Verify user was notified and state machine has quit.
-        verifyHandleFatalErrorAndQuit(IkeInternalException.class);
+        verifyHandleFatalErrorAndQuit(
+                mChildSessionStateMachine.mCreateChildLocalCreate,
+                IkeInternalException.class,
+                IkeMetricsInterface.IKE_SESSION_TERMINATED__IKE_ERROR__ERROR_INTERNAL);
     }
 
     private void setupIdleStateMachine() throws Exception {
@@ -829,16 +875,23 @@ public final class ChildSessionStateMachineTest {
                         eq(IpSecManager.DIRECTION_OUT));
     }
 
-    private void verifyNotifyUsersDeleteSession() {
-        verifyNotifyUsersDeleteSession(mSpyUserCbExecutor);
+    private void verifyNotifyUsersDeleteSession(IState state) {
+        verifyNotifyUsersDeleteSession(mSpyUserCbExecutor, state);
     }
 
-    private void verifyNotifyUsersDeleteSession(Executor spyExecutor) {
-        verifyNotifyUsersDeleteSession(spyExecutor, null);
+    private void verifyNotifyUsersDeleteSession(Executor spyExecutor, IState state) {
+        verifyNotifyUsersDeleteSession(
+                spyExecutor,
+                state,
+                null,
+                IkeMetricsInterface.IKE_SESSION_TERMINATED__IKE_ERROR__ERROR_NONE);
     }
 
     private void verifyNotifyUsersDeleteSession(
-            Executor spyExecutor, Class<? extends IkeException> exceptionClass) {
+            Executor spyExecutor,
+            IState state,
+            Class<? extends IkeException> exceptionClass,
+            int metricsExceptionType) {
         verify(spyExecutor, atLeastOnce()).execute(any(Runnable.class));
         verifyNotifyUserDeleteChildSa(mSpyCurrentChildSaRecord);
 
@@ -854,6 +907,7 @@ public final class ChildSessionStateMachineTest {
                     .verify(mMockChildSessionCallback)
                     .onClosedWithException(any(exceptionClass));
         }
+        verifyChildMetricsLogged(getStateCode(state), metricsExceptionType);
     }
 
     @Test
@@ -877,7 +931,7 @@ public final class ChildSessionStateMachineTest {
 
         assertNull(mChildSessionStateMachine.getCurrentState());
 
-        verifyNotifyUsersDeleteSession();
+        verifyNotifyUsersDeleteSession(mChildSessionStateMachine.mDeleteChildLocalDelete);
     }
 
     @Test
@@ -899,7 +953,8 @@ public final class ChildSessionStateMachineTest {
         assertNull(mChildSessionStateMachine.getCurrentState());
 
         lateExecutor.actuallyExecute();
-        verifyNotifyUsersDeleteSession(lateExecutor);
+        verifyNotifyUsersDeleteSession(
+                lateExecutor, mChildSessionStateMachine.mDeleteChildLocalDelete);
     }
 
     @Test
@@ -954,7 +1009,7 @@ public final class ChildSessionStateMachineTest {
 
         assertNull(mChildSessionStateMachine.getCurrentState());
 
-        verifyNotifyUsersDeleteSession();
+        verifyNotifyUsersDeleteSession(mChildSessionStateMachine.mDeleteChildLocalDelete);
     }
 
     @Test
@@ -1010,7 +1065,7 @@ public final class ChildSessionStateMachineTest {
                 new int[] {mSpyCurrentChildSaRecord.getLocalSpi()},
                 ((IkeDeletePayload) respPayloadList.get(0)).spisToDelete);
 
-        verifyNotifyUsersDeleteSession();
+        verifyNotifyUsersDeleteSession(mChildSessionStateMachine.mDeleteChildRemoteDelete);
     }
 
     private void verifyOutboundRekeySaPayload(List<IkePayload> outboundPayloads, boolean isResp) {
@@ -1175,10 +1230,22 @@ public final class ChildSessionStateMachineTest {
             InetAddress localAddress,
             InetAddress remoteAddress)
             throws Exception {
+        verifyRekeyChildLocalCreateHandlesResponse(
+                expectedState, isMobikeRekey, localAddress, remoteAddress, mMockUdpEncapSocket);
+    }
+
+    private void verifyRekeyChildLocalCreateHandlesResponse(
+            Class<?> expectedState,
+            boolean isMobikeRekey,
+            InetAddress localAddress,
+            InetAddress remoteAddress,
+            UdpEncapsulationSocket newEncapSocket)
+            throws Exception {
         assertTrue(expectedState.isInstance(mChildSessionStateMachine.getCurrentState()));
 
         List<IkePayload> rekeyRespPayloads = receiveRekeyChildResponse();
-        verifyLocalRekeyCreateIsDone(rekeyRespPayloads, isMobikeRekey, localAddress, remoteAddress);
+        verifyLocalRekeyCreateIsDone(
+                rekeyRespPayloads, isMobikeRekey, localAddress, remoteAddress, newEncapSocket);
     }
 
     private void verifyLocalRekeyCreateIsDone(
@@ -1186,6 +1253,17 @@ public final class ChildSessionStateMachineTest {
             boolean isMobikeRekey,
             InetAddress localAddress,
             InetAddress remoteAddress)
+            throws Exception {
+        verifyLocalRekeyCreateIsDone(
+                rekeyRespPayloads, isMobikeRekey, localAddress, remoteAddress, mMockUdpEncapSocket);
+    }
+
+    private void verifyLocalRekeyCreateIsDone(
+            List<IkePayload> rekeyRespPayloads,
+            boolean isMobikeRekey,
+            InetAddress localAddress,
+            InetAddress remoteAddress,
+            UdpEncapsulationSocket newEncapSocket)
             throws Exception {
         // Verify state transition
         assertTrue(
@@ -1213,7 +1291,8 @@ public final class ChildSessionStateMachineTest {
                 LOCAL_INIT_NEW_CHILD_SA_SPI_OUT,
                 true /*isLocalInit*/,
                 localAddress,
-                remoteAddress);
+                remoteAddress,
+                newEncapSocket);
 
         // Verify users have been notified
         verify(mSpyUserCbExecutor).execute(any(Runnable.class));
@@ -1277,7 +1356,7 @@ public final class ChildSessionStateMachineTest {
     }
 
     private <T extends IkeException> void verifyIkeSessionFatalErrorAndSendOutboundIkeDeletePayload(
-            Class<T> exceptionClass) {
+            Class<T> exceptionClass, IState expectedState, int expectedErrorCode) {
         verifySendOutboundIkeDeleteRequest();
 
         // Verify callback onFatalIkeSessionError() has been invoked
@@ -1285,6 +1364,11 @@ public final class ChildSessionStateMachineTest {
 
         // Verify retry was not scheduled
         verify(mMockChildSessionSmCallback, never()).scheduleRetryLocalRequest(any());
+
+        verifyMetricsLogged(
+                IkeMetricsInterface.IKE_SESSION_TERMINATED__SESSION_TYPE__SESSION_CHILD,
+                getStateCode(expectedState),
+                expectedErrorCode);
     }
 
     @Test
@@ -1292,7 +1376,7 @@ public final class ChildSessionStateMachineTest {
         setupStateMachineAndSpiForLocalRekey(UPDATED_LOCAL_ADDRESS, REMOTE_ADDRESS);
 
         // Send Mobike-Rekey-Create request
-        mChildSessionStateMachine.rekeyChildSessionForMobike(
+        mChildSessionStateMachine.performRekeyMigration(
                 UPDATED_LOCAL_ADDRESS, REMOTE_ADDRESS, mMockUdpEncapSocket);
         mLooper.dispatchAll();
 
@@ -1302,7 +1386,11 @@ public final class ChildSessionStateMachineTest {
                 Arrays.asList(new IkeNotifyPayload(ERROR_TYPE_NO_ADDITIONAL_SAS)));
         mLooper.dispatchAll();
 
-        verifyIkeSessionFatalErrorAndSendOutboundIkeDeletePayload(NoAdditionalSasException.class);
+        verifyIkeSessionFatalErrorAndSendOutboundIkeDeletePayload(
+                NoAdditionalSasException.class,
+                mChildSessionStateMachine.mMobikeRekeyChildLocalCreate,
+                IkeMetricsInterface
+                        .IKE_SESSION_TERMINATED__IKE_ERROR__ERROR_PROTOCOL_NO_ADDITIONAL_SAS);
     }
 
     @Test
@@ -1310,7 +1398,7 @@ public final class ChildSessionStateMachineTest {
         setupStateMachineAndSpiForLocalRekey(UPDATED_LOCAL_ADDRESS, REMOTE_ADDRESS);
 
         // Send Mobike-Rekey-Create request
-        mChildSessionStateMachine.rekeyChildSessionForMobike(
+        mChildSessionStateMachine.performRekeyMigration(
                 UPDATED_LOCAL_ADDRESS, REMOTE_ADDRESS, mMockUdpEncapSocket);
         mLooper.dispatchAll();
 
@@ -1328,7 +1416,11 @@ public final class ChildSessionStateMachineTest {
         mChildSessionStateMachine.receiveResponse(EXCHANGE_TYPE_CREATE_CHILD_SA, respPayloads);
         mLooper.dispatchAll();
 
-        verifyIkeSessionFatalErrorAndSendOutboundIkeDeletePayload(IkeException.class);
+        verifyIkeSessionFatalErrorAndSendOutboundIkeDeletePayload(
+                IkeException.class,
+                mChildSessionStateMachine.mMobikeRekeyChildLocalCreate,
+                IkeMetricsInterface
+                        .IKE_SESSION_TERMINATED__IKE_ERROR__ERROR_PROTOCOL_INVALID_SYNTAX);
     }
 
     @Test
@@ -1370,12 +1462,14 @@ public final class ChildSessionStateMachineTest {
 
         // Verify Delete response was sent, users were notified and statemachine is still running
         verifyOutboundDeletePayload(mSpyCurrentChildSaRecord.getLocalSpi(), true /*isResp*/);
-        verifyNotifyUsersDeleteSession();
+        verifyNotifyUsersDeleteSession(
+                mSpyUserCbExecutor, mChildSessionStateMachine.mRekeyChildLocalCreate);
         assertNotNull(mChildSessionStateMachine.getCurrentState());
 
         // Receive Rekey Create response and verify Child Session is closed
         List<IkePayload> rekeyRespPayloads = receiveRekeyChildResponse();
         assertNull(mChildSessionStateMachine.getCurrentState());
+        verifyNoMoreInteractions(mIkeMetrics);
     }
 
     @Test
@@ -1403,7 +1497,12 @@ public final class ChildSessionStateMachineTest {
         mLooper.dispatchAll();
 
         // Verify user was notified and state machine has quit.
-        verifyNotifyUsersDeleteSession(mSpyUserCbExecutor, InvalidSyntaxException.class);
+        verifyNotifyUsersDeleteSession(
+                mSpyUserCbExecutor,
+                mChildSessionStateMachine.mRekeyChildLocalCreate,
+                InvalidSyntaxException.class,
+                IkeMetricsInterface
+                        .IKE_SESSION_TERMINATED__IKE_ERROR__ERROR_PROTOCOL_INVALID_SYNTAX);
 
         // Verify no SPI for provisional Child was registered.
         verify(mMockChildSessionSmCallback, never())
@@ -1444,7 +1543,11 @@ public final class ChildSessionStateMachineTest {
         mLooper.dispatchAll();
 
         // Verify user was notified and state machine has quit.
-        verifyNotifyUsersDeleteSession(mSpyUserCbExecutor, IkeInternalException.class);
+        verifyNotifyUsersDeleteSession(
+                mSpyUserCbExecutor,
+                mChildSessionStateMachine.mRekeyChildLocalCreate,
+                IkeInternalException.class,
+                IkeMetricsInterface.IKE_SESSION_TERMINATED__IKE_ERROR__ERROR_INTERNAL);
 
         // Verify SPI for provisional Child was registered and unregistered.
         verify(mMockChildSessionSmCallback)
@@ -1937,6 +2040,7 @@ public final class ChildSessionStateMachineTest {
         verifyNotifyUserDeleteChildSa(mSpyLocalInitNewChildSaRecord);
 
         verify(mMockChildSessionCallback).onClosed();
+        verify(mIkeMetrics, never()).logSessionTerminated(anyInt(), anyInt(), anyInt(), anyInt());
     }
 
     @Test
@@ -2049,7 +2153,10 @@ public final class ChildSessionStateMachineTest {
                 SK_D);
         mLooper.dispatchAll();
 
-        verifyHandleFatalErrorAndQuit(IkeInternalException.class);
+        verifyHandleFatalErrorAndQuit(
+                mChildSessionStateMachine.mCreateChildLocalCreate,
+                IkeInternalException.class,
+                IkeMetricsInterface.IKE_SESSION_TERMINATED__IKE_ERROR__ERROR_INTERNAL);
         verify(spyIkeLog).wtf(anyString(), anyString(), any(RuntimeException.class));
     }
 
@@ -2307,24 +2414,29 @@ public final class ChildSessionStateMachineTest {
         verifyRcvRekeyReqAndRejectWithErrorNotify(rekeyReqPayloads, ERROR_TYPE_INVALID_SYNTAX);
     }
 
-    @Test
-    public void testMobikeRekeyChildLocalCreateHandlesResp() throws Exception {
-        setupStateMachineAndSpiForLocalRekey(UPDATED_LOCAL_ADDRESS, REMOTE_ADDRESS);
-
-        // Send MOBIKE Rekey-Create request
-        mChildSessionStateMachine.rekeyChildSessionForMobike(
-                UPDATED_LOCAL_ADDRESS, REMOTE_ADDRESS, mMockUdpEncapSocket);
+    private void verifyMobikeRekeyFallback(UdpEncapsulationSocket newEncapSocket) throws Exception {
         mLooper.dispatchAll();
 
         verifyRekeyChildLocalCreateHandlesResponse(
                 ChildSessionStateMachine.MobikeRekeyChildLocalCreate.class,
                 true /* isMobikeRekey */,
                 UPDATED_LOCAL_ADDRESS,
-                REMOTE_ADDRESS);
+                REMOTE_ADDRESS,
+                newEncapSocket);
 
         assertEquals(UPDATED_LOCAL_ADDRESS, mChildSessionStateMachine.mLocalAddress);
         assertEquals(REMOTE_ADDRESS, mChildSessionStateMachine.mRemoteAddress);
-        assertEquals(mMockUdpEncapSocket, mChildSessionStateMachine.mUdpEncapSocket);
+        assertEquals(newEncapSocket, mChildSessionStateMachine.mUdpEncapSocket);
+    }
+
+    @Test
+    public void testMobikeRekeyChildLocalCreateHandlesResp() throws Exception {
+        setupStateMachineAndSpiForLocalRekey(UPDATED_LOCAL_ADDRESS, REMOTE_ADDRESS);
+
+        // Send MOBIKE Rekey-Create request
+        mChildSessionStateMachine.performRekeyMigration(
+                UPDATED_LOCAL_ADDRESS, REMOTE_ADDRESS, mMockUdpEncapSocket);
+        verifyMobikeRekeyFallback(mMockUdpEncapSocket);
     }
 
     @Test
@@ -2338,7 +2450,7 @@ public final class ChildSessionStateMachineTest {
         setupStateMachineAndSpiForLocalRekey(UPDATED_LOCAL_ADDRESS, REMOTE_ADDRESS);
 
         // MOBIKE Rekey
-        mChildSessionStateMachine.rekeyChildSessionForMobike(
+        mChildSessionStateMachine.performRekeyMigration(
                 UPDATED_LOCAL_ADDRESS, REMOTE_ADDRESS, mMockUdpEncapSocket);
         mLooper.dispatchAll();
         receiveRekeyChildResponse();
@@ -2353,6 +2465,87 @@ public final class ChildSessionStateMachineTest {
                         mSpyLocalInitNewChildSaRecord.getInboundIpSecTransform(),
                         mSpyLocalInitNewChildSaRecord.getOutboundIpSecTransform());
     }
+
+    @Test
+    @IgnoreUpTo(Build.VERSION_CODES.TIRAMISU)
+    public void testMobike_usesKernelMobikeForSameAddressFamilyAndEncapSocket() throws Exception {
+        verifyMobike_usesKernelMobikeForSameEncapSocket(UPDATED_LOCAL_ADDRESS, REMOTE_ADDRESS);
+    }
+
+    @Test
+    @IgnoreUpTo(Build.VERSION_CODES.TIRAMISU)
+    public void testMobike_usesKernelMobikeForDifferentAddressFamilyAndSameEncapSocket()
+            throws Exception {
+        verifyMobike_usesKernelMobikeForSameEncapSocket(LOCAL_ADDRESS_6, REMOTE_ADDRESS_6);
+    }
+
+    private void verifyMobike_usesKernelMobikeForSameEncapSocket(
+            InetAddress newLocalAddress, InetAddress newRemoteAddress) throws Exception {
+        doReturn(true)
+                .when(mMockPackageManager)
+                .hasSystemFeature(PackageManager.FEATURE_IPSEC_TUNNEL_MIGRATION);
+        setupIdleStateMachine();
+
+        // Send MOBIKE request
+        mChildSessionStateMachine.performMigration(
+                newLocalAddress, newRemoteAddress, mMockUdpEncapSocket);
+        mLooper.dispatchAll();
+
+        // Verify kernel MOBIKE methods called
+        verify(mMockIpSecService)
+                .migrateTransform(
+                        anyInt(),
+                        eq(newLocalAddress.getHostAddress()),
+                        eq(newRemoteAddress.getHostAddress()),
+                        any());
+        verify(mMockIpSecService)
+                .migrateTransform(
+                        anyInt(),
+                        eq(newRemoteAddress.getHostAddress()),
+                        eq(newLocalAddress.getHostAddress()),
+                        any());
+
+        // Verify callbacks called, and state machine goes back to Idle state
+        verify(mMockChildSessionCallback)
+                .onIpSecTransformsMigrated(
+                        mSpyCurrentChildSaRecord.getInboundIpSecTransform(),
+                        mSpyCurrentChildSaRecord.getOutboundIpSecTransform());
+        assertTrue(
+                mChildSessionStateMachine.getCurrentState()
+                        instanceof ChildSessionStateMachine.Idle);
+
+        // Verify addresses and sockets correct
+        assertEquals(newLocalAddress, mChildSessionStateMachine.mLocalAddress);
+        assertEquals(newRemoteAddress, mChildSessionStateMachine.mRemoteAddress);
+        assertEquals(mMockUdpEncapSocket, mChildSessionStateMachine.mUdpEncapSocket);
+    }
+
+    private void verifyKernelMobikeFallbackForUnsupportedMigrations(
+            UdpEncapsulationSocket newEncapSocket) throws Exception {
+        doReturn(true)
+                .when(mMockPackageManager)
+                .hasSystemFeature(PackageManager.FEATURE_IPSEC_TUNNEL_MIGRATION);
+        setupStateMachineAndSpiForLocalRekey(UPDATED_LOCAL_ADDRESS, REMOTE_ADDRESS);
+
+        // Send MOBIKE request
+        mChildSessionStateMachine.performMigration(
+                UPDATED_LOCAL_ADDRESS, REMOTE_ADDRESS, newEncapSocket);
+        verifyMobikeRekeyFallback(newEncapSocket);
+    }
+
+    @Test
+    @IgnoreUpTo(Build.VERSION_CODES.TIRAMISU)
+    public void testMobike_usesRekeyMobikeFallbackForChangingEncapSocket() throws Exception {
+        verifyKernelMobikeFallbackForUnsupportedMigrations(mock(UdpEncapsulationSocket.class));
+    }
+
+    @Test
+    @IgnoreUpTo(Build.VERSION_CODES.TIRAMISU)
+    public void testMobike_usesRekeyMobikeFallbackForChangingEncapType() throws Exception {
+        verifyKernelMobikeFallbackForUnsupportedMigrations(null);
+    }
+
+    // TODO (b/277668745): Add tests for 6 -> 4 and 6 -> 6 migrations with and without UDP encap.
 
     private static class LateExecuteExecutor implements Executor {
         private final List<Runnable> mCommands = new ArrayList<>();
