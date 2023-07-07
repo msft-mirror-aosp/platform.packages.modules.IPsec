@@ -19,6 +19,8 @@ import android.annotation.NonNull;
 import android.net.ipsec.ike.ChildSessionCallback;
 import android.net.ipsec.ike.IkeSessionCallback;
 
+import com.android.internal.net.ipsec.ike.utils.IkeMetricsInterface;
+
 /**
  * IkeInternalException encapsulates all local implementation or resource related exceptions.
  *
@@ -66,5 +68,15 @@ public final class IkeInternalException extends IkeNonProtocolException {
      */
     public IkeInternalException(@NonNull String message, @NonNull Throwable cause) {
         super(message, cause);
+    }
+
+    /**
+     * Returns the error code for metrics
+     *
+     * @hide
+     */
+    @Override
+    public int getMetricsErrorCode() {
+        return IkeMetricsInterface.IKE_SESSION_TERMINATED__IKE_ERROR__ERROR_INTERNAL;
     }
 }
