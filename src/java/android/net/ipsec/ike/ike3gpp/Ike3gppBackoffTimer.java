@@ -16,14 +16,10 @@
 
 package android.net.ipsec.ike.ike3gpp;
 
-import android.annotation.IntDef;
 import android.annotation.SuppressLint;
 import android.annotation.SystemApi;
-import android.util.ArraySet;
 
-import java.lang.annotation.Retention;
-import java.lang.annotation.RetentionPolicy;
-import java.util.Set;
+import com.android.internal.net.ipsec.ike.message.IkeNotifyPayload;
 
 /**
  * Ike3gppBackoffTimer represents the data provided by the peer/remote endpoint for a BACKOFF_TIMER
@@ -60,19 +56,6 @@ public final class Ike3gppBackoffTimer extends Ike3gppData {
      */
     public static final int ERROR_TYPE_NETWORK_FAILURE = 10500;
 
-    /** @hide */
-    @Retention(RetentionPolicy.SOURCE)
-    @IntDef({ERROR_TYPE_NO_APN_SUBSCRIPTION, ERROR_TYPE_NETWORK_FAILURE})
-    public @interface ErrorType {}
-
-    private static final Set<Integer> VALID_BACKOFF_TIMER_CAUSES;
-
-    static {
-        VALID_BACKOFF_TIMER_CAUSES = new ArraySet<>();
-        VALID_BACKOFF_TIMER_CAUSES.add(ERROR_TYPE_NO_APN_SUBSCRIPTION);
-        VALID_BACKOFF_TIMER_CAUSES.add(ERROR_TYPE_NETWORK_FAILURE);
-    }
-
     private final byte mBackoffTimer;
     private final int mBackoffCause;
 
@@ -85,8 +68,7 @@ public final class Ike3gppBackoffTimer extends Ike3gppData {
      */
     // NoByteOrShort: using byte to be consistent with the Backoff Timer specification
     @SystemApi
-    public Ike3gppBackoffTimer(
-            @SuppressLint("NoByteOrShort") byte backoffTimer, @ErrorType int backoffCause) {
+    public Ike3gppBackoffTimer(@SuppressLint("NoByteOrShort") byte backoffTimer, int backoffCause) {
         mBackoffTimer = backoffTimer;
         mBackoffCause = backoffCause;
     }
@@ -109,12 +91,12 @@ public final class Ike3gppBackoffTimer extends Ike3gppData {
     }
 
     /** Returns the cause for this Backoff Timer specified by the peer. */
-    public @ErrorType int getBackoffCause() {
+    public int getBackoffCause() {
         return mBackoffCause;
     }
 
     /** @hide */
-    public static boolean isValidErrorNotifyCause(int notifyType) {
-        return VALID_BACKOFF_TIMER_CAUSES.contains(notifyType);
+    public static boolean isValidErrorNotifyCause(IkeNotifyPayload notifyPayload) {
+        return notifyPayload.isErrorNotify();
     }
 }

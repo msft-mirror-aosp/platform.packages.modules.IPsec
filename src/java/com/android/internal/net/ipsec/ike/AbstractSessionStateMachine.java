@@ -16,12 +16,14 @@
 package com.android.internal.net.ipsec.ike;
 
 import static android.net.ipsec.ike.IkeManager.getIkeLog;
+import static android.net.ipsec.ike.IkeManager.getIkeMetrics;
 
-import android.os.Looper;
+import android.net.ipsec.ike.exceptions.IkeException;
 import android.os.Message;
 import android.util.SparseArray;
 
 import com.android.internal.annotations.VisibleForTesting;
+import com.android.internal.net.ipsec.ike.utils.IkeMetricsInterface;
 import com.android.internal.util.IState;
 import com.android.internal.util.State;
 import com.android.internal.util.StateMachine;
@@ -96,13 +98,18 @@ abstract class AbstractSessionStateMachine extends StateMachine {
     // Default delay time for retrying a request
     static final long RETRY_INTERVAL_MS = TimeUnit.SECONDS.toMillis(15L);
 
+    @VisibleForTesting final IkeContext mIkeContext;
+
     protected final Executor mUserCbExecutor;
     private final String mLogTag;
 
     protected volatile boolean mIsClosing = false;
 
-    protected AbstractSessionStateMachine(String name, Looper looper, Executor userCbExecutor) {
-        super(name, looper);
+    protected AbstractSessionStateMachine(
+            String name, IkeContext ikeContext, Executor userCbExecutor) {
+        super(name, ikeContext.getLooper());
+
+        mIkeContext = ikeContext;
         mLogTag = name;
         mUserCbExecutor = userCbExecutor;
     }
@@ -183,6 +190,8 @@ abstract class AbstractSessionStateMachine extends StateMachine {
         protected abstract void cleanUpAndQuit(RuntimeException e);
 
         protected abstract String getCmdString(int cmd);
+
+        protected abstract int getMetricsStateCode();
     }
 
     protected void executeUserCallback(Runnable r) {
@@ -224,6 +233,27 @@ abstract class AbstractSessionStateMachine extends StateMachine {
 
         return "Null State";
     }
+
+    protected void recordMetricsEvent_sessionTerminated(IkeException exception) {
+        final IState currentState = getCurrentState();
+        final int stateCode =
+                currentState instanceof ExceptionHandlerBase
+                        ? ((ExceptionHandlerBase) currentState).getMetricsStateCode()
+                        : IkeMetricsInterface.IKE_SESSION_TERMINATED__IKE_STATE__STATE_UNKNOWN;
+        final int exceptionCode =
+                exception == null
+                        ? IkeMetricsInterface.IKE_SESSION_TERMINATED__IKE_ERROR__ERROR_NONE
+                        : exception.getMetricsErrorCode();
+
+        getIkeMetrics()
+                .logSessionTerminated(
+                        mIkeContext.getIkeCaller(),
+                        getMetricsSessionType(),
+                        stateCode,
+                        exceptionCode);
+    }
+
+    protected abstract int getMetricsSessionType();
 
     @Override
     protected void log(String s) {
