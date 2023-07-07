@@ -22,7 +22,6 @@ import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_T
 
 import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.BUNDLE_KEY_CHILD_REMOTE_SPI;
 import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.CMD_ALARM_FIRED;
-import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.buildIkeAlarmIntent;
 import static com.android.internal.net.ipsec.ike.message.IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA;
 import static com.android.internal.net.ipsec.ike.message.IkeHeader.EXCHANGE_TYPE_IKE_AUTH;
 import static com.android.internal.net.ipsec.ike.message.IkeHeader.EXCHANGE_TYPE_INFORMATIONAL;
@@ -41,6 +40,7 @@ import static com.android.internal.net.ipsec.ike.message.IkePayload.PAYLOAD_TYPE
 import static com.android.internal.net.ipsec.ike.message.IkePayload.PAYLOAD_TYPE_TS_RESPONDER;
 import static com.android.internal.net.ipsec.ike.message.IkePayload.PROTOCOL_ID_ESP;
 import static com.android.internal.net.ipsec.ike.utils.IkeAlarm.IkeAlarmConfig;
+import static com.android.internal.net.ipsec.ike.utils.IkeAlarm.buildIkeAlarmIntent;
 import static com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver.ACTION_DELETE_CHILD;
 import static com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver.ACTION_REKEY_CHILD;
 
@@ -94,6 +94,8 @@ import com.android.internal.net.ipsec.ike.message.IkeSaPayload;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.ChildProposal;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.DhGroupTransform;
 import com.android.internal.net.ipsec.ike.message.IkeTsPayload;
+import com.android.internal.net.ipsec.ike.shim.ShimUtils;
+import com.android.internal.net.ipsec.ike.utils.IkeMetricsInterface;
 import com.android.internal.net.ipsec.ike.utils.IpSecSpiGenerator;
 import com.android.internal.net.ipsec.ike.utils.RandomnessFactory;
 import com.android.internal.util.State;
@@ -151,7 +153,6 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
         CMD_TO_STR.put(CMD_HANDLE_RECEIVED_RESPONSE, "Rcv response");
     }
 
-    private final IkeContext mIkeContext;
     private final int mIkeSessionId;
     private final Handler mIkeHandler;
     private final IpSecManager mIpSecManager;
@@ -254,9 +255,8 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
             ChildSessionStateMachine.Config childSmConfig,
             ChildSessionCallback userCallback,
             IChildSessionSmCallback childSmCallback) {
-        super(TAG, ikeContext.getLooper(), childSmConfig.userCbExecutor);
+        super(TAG, ikeContext, childSmConfig.userCbExecutor);
 
-        mIkeContext = ikeContext;
         mIkeSessionId = childSmConfig.ikeSessionId;
         mIkeHandler = childSmConfig.ikeHandler;
         mIpSecManager = childSmConfig.ipSecManager;
@@ -452,6 +452,51 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
     }
 
     /**
+     * Update IPsec SAs via MOBIKE.
+     *
+     * <p>This method is called synchronously from IkeStateMachine, and may complete synchronously
+     * if kernel MOBIKE can be used. Otherwise, it will fall back to using rekeys to synchronize
+     * IPsec state.
+     *
+     * @param localAddress The local (outer) address from which traffic will originate.
+     * @param remoteAddress The remote (outer) address to which traffic will be sent.
+     * @param udpEncapSocket The socket to use for UDP encapsulation, or NULL if no encap needed.
+     */
+    public void performMigration(
+            InetAddress localAddress,
+            InetAddress remoteAddress,
+            UdpEncapsulationSocket udpEncapSocket) {
+
+        final UdpEncapsulationSocket oldEncapSocket = mUdpEncapSocket;
+
+        this.mLocalAddress = localAddress;
+        this.mRemoteAddress = remoteAddress;
+        this.mUdpEncapSocket = udpEncapSocket;
+
+        if (oldEncapSocket == mUdpEncapSocket
+                && ShimUtils.getInstance()
+                        .supportsSameSocketKernelMigration(mIkeContext.getContext())) {
+            mIpSecManager.startTunnelModeTransformMigration(
+                    mCurrentChildSaRecord.getInboundIpSecTransform(),
+                    mRemoteAddress,
+                    mLocalAddress);
+            mIpSecManager.startTunnelModeTransformMigration(
+                    mCurrentChildSaRecord.getOutboundIpSecTransform(),
+                    mLocalAddress,
+                    mRemoteAddress);
+            executeUserCallback(() -> {
+                mUserCallback.onIpSecTransformsMigrated(
+                        mCurrentChildSaRecord.getInboundIpSecTransform(),
+                        mCurrentChildSaRecord.getOutboundIpSecTransform());
+            });
+
+            mChildSmCallback.onProcedureFinished(ChildSessionStateMachine.this);
+        } else {
+            performRekeyMigration(localAddress, remoteAddress, udpEncapSocket);
+        }
+    }
+
+    /**
      * Initiate Rekey Child procedure for MOBIKE (instead of migrating IPsec SAs).
      *
      * <p>This method should only be used as a fallback mode for devices that do not have
@@ -469,10 +514,11 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
      * @param remoteAddress The remote (outer) address to which traffic will be sent.
      * @param udpEncapSocket The socket to use for UDP encapsulation, or NULL if no encap needed.
      */
-    public void rekeyChildSessionForMobike(
+    public void performRekeyMigration(
             InetAddress localAddress,
             InetAddress remoteAddress,
             UdpEncapsulationSocket udpEncapSocket) {
+
         this.mLocalAddress = localAddress;
         this.mRemoteAddress = remoteAddress;
         this.mUdpEncapSocket = udpEncapSocket;
@@ -689,6 +735,8 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                     () -> {
                         mUserCallback.onClosedWithException(wrapAsIkeException(e));
                     });
+
+            recordMetricsEvent_sessionTerminated(wrapAsIkeException(e));
             logWtf("Unexpected exception in " + getCurrentStateName(), e);
             quitSessionNow();
         }
@@ -746,6 +794,8 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                 () -> {
                     mUserCallback.onClosedWithException(ikeException);
                 });
+
+        recordMetricsEvent_sessionTerminated(ikeException);
         quitSessionNow();
     }
 
@@ -767,11 +817,19 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                             () -> {
                                 mUserCallback.onClosed();
                             });
+
+                    // ChildSessionTerminated Metrics not recorded; this is a result of the parent
+                    // session tearing down.
                     quitSessionNow();
                     return HANDLED;
                 default:
                     return NOT_HANDLED;
             }
+        }
+
+        @Override
+        protected int getMetricsStateCode() {
+            return IkeMetricsInterface.IKE_SESSION_TERMINATED__IKE_STATE__STATE_CHILD_KILL;
         }
     }
 
@@ -1000,6 +1058,8 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                             () -> {
                                 mUserCallback.onClosed();
                             });
+
+                    recordMetricsEvent_sessionTerminated(null);
                     quitSessionNow();
                     return HANDLED;
                 case CMD_FORCE_TRANSITION:
@@ -1013,6 +1073,11 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
         @Override
         public void exitState() {
             CreateChildSaHelper.releaseSpiResources(mRequestPayloads);
+        }
+
+        @Override
+        protected int getMetricsStateCode() {
+            return IkeMetricsInterface.IKE_SESSION_TERMINATED__IKE_STATE__STATE_CHILD_INITIAL;
         }
     }
 
@@ -1097,6 +1162,12 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
             CreateChildSaHelper.releaseSpiResources(mRequestPayloads);
         }
 
+        @Override
+        protected int getMetricsStateCode() {
+            return IkeMetricsInterface
+                    .IKE_SESSION_TERMINATED__IKE_STATE__STATE_CHILD_CREATE_LOCAL_CREATE;
+        }
+
         private boolean isTemporaryFailure(CreateChildResult createChildResult) {
             if (createChildResult.status != CREATE_STATUS_CHILD_ERROR_RCV_NOTIFY) {
                 return false;
@@ -1151,6 +1222,11 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                     return NOT_HANDLED;
             }
         }
+
+        @Override
+        protected int getMetricsStateCode() {
+            return IkeMetricsInterface.IKE_SESSION_TERMINATED__IKE_STATE__STATE_CHILD_IDLE;
+        }
     }
 
     /**
@@ -1167,6 +1243,12 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
         public void maybeNotifyIkeSessionStateMachine() {
             // Do not notify IkeSessionStateMachine because Child Session needs to process the
             // deferred request and start a new procedure
+        }
+
+        @Override
+        protected int getMetricsStateCode() {
+            return IkeMetricsInterface
+                    .IKE_SESSION_TERMINATED__IKE_STATE__STATE_CHILD_IDLE_WITH_DEFERRED_REQUEST;
         }
     }
 
@@ -1186,11 +1268,20 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
             switch (message.what) {
                 case CMD_HANDLE_RECEIVED_RESPONSE:
                     // Do not need to verify the response since the Child Session is already closed
+
+                    // Metrics not recorded, since already closed. Metrics recorded at the same
+                    // time that user callbacks are fired.
                     quitSessionNow();
                     return HANDLED;
                 default:
                     return NOT_HANDLED;
             }
+        }
+
+        @Override
+        protected int getMetricsStateCode() {
+            return IkeMetricsInterface
+                    .IKE_SESSION_TERMINATED__IKE_STATE__STATE_CHILD_CLOSE_AND_AWAIT_RESPONSE;
         }
     }
 
@@ -1264,6 +1355,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                         delRunnable.run();
                         mUserCallback.onClosed();
                     });
+            recordMetricsEvent_sessionTerminated(null);
 
             mChildSmCallback.onChildSaDeleted(mCurrentChildSaRecord.getRemoteSpi());
             mCurrentChildSaRecord.close();
@@ -1402,6 +1494,12 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                     return NOT_HANDLED;
             }
         }
+
+        @Override
+        protected int getMetricsStateCode() {
+            return IkeMetricsInterface
+                    .IKE_SESSION_TERMINATED__IKE_STATE__STATE_CHILD_DELETE_LOCAL_DELETE;
+        }
     }
 
     /**
@@ -1422,6 +1520,12 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                 default:
                     return NOT_HANDLED;
             }
+        }
+
+        @Override
+        protected int getMetricsStateCode() {
+            return IkeMetricsInterface
+                    .IKE_SESSION_TERMINATED__IKE_STATE__STATE_CHILD_DELETE_REMOTE_DELETE;
         }
     }
 
@@ -1584,6 +1688,12 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
         public void exitState() {
             CreateChildSaHelper.releaseSpiResources(mRequestPayloads);
         }
+
+        @Override
+        protected int getMetricsStateCode() {
+            return IkeMetricsInterface
+                    .IKE_SESSION_TERMINATED__IKE_STATE__STATE_CHILD_REKEY_LOCAL_CREATE;
+        }
     }
 
     /**
@@ -1619,6 +1729,8 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
         protected void handleProcessRespOrSaCreationFailAndQuit(
                 int registeredSpi, Exception exception) {
             sendDeleteIkeRequest();
+
+            recordMetricsEvent_sessionTerminated(wrapAsIkeException(exception));
             mChildSmCallback.onFatalIkeSessionError(exception);
         }
 
@@ -1626,7 +1738,15 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
         protected void handleErrorNotify(Exception exception) {
             loge("Received error notification for rekey Child. Tear down IKE SA");
             sendDeleteIkeRequest();
+
+            recordMetricsEvent_sessionTerminated(wrapAsIkeException(exception));
             mChildSmCallback.onFatalIkeSessionError(exception);
+        }
+
+        @Override
+        protected int getMetricsStateCode() {
+            return IkeMetricsInterface
+                    .IKE_SESSION_TERMINATED__IKE_STATE__STATE_CHILD_MOBIKE_REKEY_LOCAL_CREATE;
         }
     }
 
@@ -1843,6 +1963,12 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
 
             transitionTo(mIdle);
         }
+
+        @Override
+        protected int getMetricsStateCode() {
+            return IkeMetricsInterface
+                    .IKE_SESSION_TERMINATED__IKE_STATE__STATE_CHILD_REKEY_REMOTE_CREATE;
+        }
     }
 
     /**
@@ -1964,6 +2090,12 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                     return NOT_HANDLED;
             }
         }
+
+        @Override
+        protected int getMetricsStateCode() {
+            return IkeMetricsInterface
+                    .IKE_SESSION_TERMINATED__IKE_STATE__STATE_CHILD_REKEY_LOCAL_DELETE;
+        }
     }
 
     /**
@@ -2044,6 +2176,17 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
         public void exitState() {
             removeMessages(TIMEOUT_REKEY_REMOTE_DELETE);
         }
+
+        @Override
+        protected int getMetricsStateCode() {
+            return IkeMetricsInterface
+                    .IKE_SESSION_TERMINATED__IKE_STATE__STATE_CHILD_REKEY_REMOTE_DELETE;
+        }
+    }
+
+    @Override
+    protected int getMetricsSessionType() {
+        return IkeMetricsInterface.IKE_SESSION_TERMINATED__SESSION_TYPE__SESSION_CHILD;
     }
 
     /**
