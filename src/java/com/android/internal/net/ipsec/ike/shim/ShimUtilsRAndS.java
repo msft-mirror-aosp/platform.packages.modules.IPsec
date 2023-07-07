@@ -16,7 +16,9 @@
 
 package com.android.internal.net.ipsec.ike.shim;
 
+import android.content.Context;
 import android.net.Network;
+import android.net.SocketKeepalive;
 import android.net.ipsec.ike.exceptions.IkeException;
 import android.net.ipsec.ike.exceptions.IkeInternalException;
 import android.net.ipsec.ike.exceptions.IkeNetworkLostException;
@@ -57,10 +59,26 @@ public class ShimUtilsRAndS extends ShimUtils {
         ikeSession.onNonFatalError(new IkeNetworkLostException(network));
     }
 
-    // TODO:b/245591890 Remove this method and have the same behaviour as ShimUtilsMinT across all
+    // TODO:b/245591890 Remove this method and have the same behaviour as ShimUtilsT across all
     // SDKs when it is proven to be safe.
     @Override
     public void executeOrSendFatalError(Runnable r, IkeConnectionController.Callback cb) {
         r.run();
+    }
+
+    @Override
+    public void startKeepalive(SocketKeepalive keepalive, int keepaliveDelaySeconds,
+            int keepaliveOptions, Network underpinnedNetwork) {
+        keepalive.start(keepaliveDelaySeconds);
+    }
+
+    @Override
+    public boolean shouldSkipIfSameNetwork(boolean skipIfSameNetwork) {
+        return true;
+    }
+
+    @Override
+    public boolean supportsSameSocketKernelMigration(Context context) {
+        return false;
     }
 }
