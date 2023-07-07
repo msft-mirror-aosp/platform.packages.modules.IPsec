@@ -17,6 +17,8 @@ package android.net.ipsec.ike.exceptions;
 
 import android.annotation.NonNull;
 
+import com.android.internal.net.ipsec.ike.utils.IkeMetricsInterface;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -77,5 +79,16 @@ public final class UnsupportedCriticalPayloadException extends IkeProtocolExcept
     @Override
     protected boolean isValidDataLength(int dataLen) {
         return EXPECTED_ERROR_DATA_LEN == dataLen;
+    }
+
+    /**
+     * Returns the error code for metrics
+     *
+     * @hide
+     */
+    @Override
+    public int getMetricsErrorCode() {
+        return IkeMetricsInterface
+                .IKE_SESSION_TERMINATED__IKE_ERROR__ERROR_PROTOCOL_UNSUPPORTED_CRITICAL_PAYLOAD;
     }
 }

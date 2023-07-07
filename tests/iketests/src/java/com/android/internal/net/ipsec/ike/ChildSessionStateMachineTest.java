@@ -69,6 +69,7 @@ import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import android.content.Context;
@@ -128,6 +129,8 @@ import com.android.internal.net.ipsec.test.ike.message.IkeSaPayload.PrfTransform
 import com.android.internal.net.ipsec.test.ike.message.IkeTestUtils;
 import com.android.internal.net.ipsec.test.ike.message.IkeTsPayload;
 import com.android.internal.net.ipsec.test.ike.testutils.MockIpSecTestUtils;
+import com.android.internal.net.ipsec.test.ike.utils.IState;
+import com.android.internal.net.ipsec.test.ike.utils.IkeMetricsInterface;
 import com.android.internal.net.ipsec.test.ike.utils.IpSecSpiGenerator;
 import com.android.internal.net.ipsec.test.ike.utils.RandomnessFactory;
 import com.android.internal.net.utils.test.Log;
@@ -152,7 +155,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.Executor;
 
-public final class ChildSessionStateMachineTest {
+public final class ChildSessionStateMachineTest extends IkeSessionTestBase {
     private static final String TAG = "ChildSessionStateMachineTest";
 
     @Rule public final DevSdkIgnoreRule ignoreRule = new DevSdkIgnoreRule();
@@ -685,12 +688,21 @@ public final class ChildSessionStateMachineTest {
         verify(mMockChildSessionCallback).onOpened(any(ChildSessionConfiguration.class));
     }
 
-    private <T extends IkeException> void verifyHandleFatalErrorAndQuit(Class<T> exceptionClass) {
+    private void verifyChildMetricsLogged(int stateCode, int exceptionCode) {
+        verifyMetricsLogged(
+                IkeMetricsInterface.IKE_SESSION_TERMINATED__SESSION_TYPE__SESSION_CHILD,
+                stateCode,
+                exceptionCode);
+    }
+
+    private <T extends IkeException> void verifyHandleFatalErrorAndQuit(
+            IState state, Class<T> exceptionClass, int metricsExceptionType) {
         assertNull(mChildSessionStateMachine.getCurrentState());
         verify(mMockChildSessionSmCallback).onProcedureFinished(mChildSessionStateMachine);
         verify(mMockChildSessionSmCallback).onChildSessionClosed(mMockChildSessionCallback);
 
         verify(mMockChildSessionCallback).onClosedWithException(any(exceptionClass));
+        verifyChildMetricsLogged(getStateCode(state), metricsExceptionType);
     }
 
     private void createChildSessionAndReceiveErrorNotification(int notifyType) throws Exception {
@@ -716,7 +728,11 @@ public final class ChildSessionStateMachineTest {
                 .onChildSaCreated(anyInt(), eq(mChildSessionStateMachine));
 
         // Verify user was notified and state machine has quit.
-        verifyHandleFatalErrorAndQuit(NoValidProposalChosenException.class);
+        verifyHandleFatalErrorAndQuit(
+                mChildSessionStateMachine.mCreateChildLocalCreate,
+                NoValidProposalChosenException.class,
+                IkeMetricsInterface
+                        .IKE_SESSION_TERMINATED__IKE_ERROR__ERROR_PROTOCOL_NO_PROPOSAL_CHOSEN);
     }
 
     @Test
@@ -762,7 +778,11 @@ public final class ChildSessionStateMachineTest {
         verify(mMockChildSessionSmCallback).onChildSaDeleted(CURRENT_CHILD_SA_SPI_OUT);
 
         // Verify user was notified and state machine has quit.
-        verifyHandleFatalErrorAndQuit(InvalidSyntaxException.class);
+        verifyHandleFatalErrorAndQuit(
+                mChildSessionStateMachine.mCreateChildLocalCreate,
+                InvalidSyntaxException.class,
+                IkeMetricsInterface
+                        .IKE_SESSION_TERMINATED__IKE_ERROR__ERROR_PROTOCOL_INVALID_SYNTAX);
     }
 
     @Test
@@ -786,7 +806,10 @@ public final class ChildSessionStateMachineTest {
         verify(mMockChildSessionSmCallback).onChildSaDeleted(CURRENT_CHILD_SA_SPI_OUT);
 
         // Verify user was notified and state machine has quit.
-        verifyHandleFatalErrorAndQuit(IkeInternalException.class);
+        verifyHandleFatalErrorAndQuit(
+                mChildSessionStateMachine.mCreateChildLocalCreate,
+                IkeInternalException.class,
+                IkeMetricsInterface.IKE_SESSION_TERMINATED__IKE_ERROR__ERROR_INTERNAL);
     }
 
     private void setupIdleStateMachine() throws Exception {
@@ -852,16 +875,23 @@ public final class ChildSessionStateMachineTest {
                         eq(IpSecManager.DIRECTION_OUT));
     }
 
-    private void verifyNotifyUsersDeleteSession() {
-        verifyNotifyUsersDeleteSession(mSpyUserCbExecutor);
+    private void verifyNotifyUsersDeleteSession(IState state) {
+        verifyNotifyUsersDeleteSession(mSpyUserCbExecutor, state);
     }
 
-    private void verifyNotifyUsersDeleteSession(Executor spyExecutor) {
-        verifyNotifyUsersDeleteSession(spyExecutor, null);
+    private void verifyNotifyUsersDeleteSession(Executor spyExecutor, IState state) {
+        verifyNotifyUsersDeleteSession(
+                spyExecutor,
+                state,
+                null,
+                IkeMetricsInterface.IKE_SESSION_TERMINATED__IKE_ERROR__ERROR_NONE);
     }
 
     private void verifyNotifyUsersDeleteSession(
-            Executor spyExecutor, Class<? extends IkeException> exceptionClass) {
+            Executor spyExecutor,
+            IState state,
+            Class<? extends IkeException> exceptionClass,
+            int metricsExceptionType) {
         verify(spyExecutor, atLeastOnce()).execute(any(Runnable.class));
         verifyNotifyUserDeleteChildSa(mSpyCurrentChildSaRecord);
 
@@ -877,6 +907,7 @@ public final class ChildSessionStateMachineTest {
                     .verify(mMockChildSessionCallback)
                     .onClosedWithException(any(exceptionClass));
         }
+        verifyChildMetricsLogged(getStateCode(state), metricsExceptionType);
     }
 
     @Test
@@ -900,7 +931,7 @@ public final class ChildSessionStateMachineTest {
 
         assertNull(mChildSessionStateMachine.getCurrentState());
 
-        verifyNotifyUsersDeleteSession();
+        verifyNotifyUsersDeleteSession(mChildSessionStateMachine.mDeleteChildLocalDelete);
     }
 
     @Test
@@ -922,7 +953,8 @@ public final class ChildSessionStateMachineTest {
         assertNull(mChildSessionStateMachine.getCurrentState());
 
         lateExecutor.actuallyExecute();
-        verifyNotifyUsersDeleteSession(lateExecutor);
+        verifyNotifyUsersDeleteSession(
+                lateExecutor, mChildSessionStateMachine.mDeleteChildLocalDelete);
     }
 
     @Test
@@ -977,7 +1009,7 @@ public final class ChildSessionStateMachineTest {
 
         assertNull(mChildSessionStateMachine.getCurrentState());
 
-        verifyNotifyUsersDeleteSession();
+        verifyNotifyUsersDeleteSession(mChildSessionStateMachine.mDeleteChildLocalDelete);
     }
 
     @Test
@@ -1033,7 +1065,7 @@ public final class ChildSessionStateMachineTest {
                 new int[] {mSpyCurrentChildSaRecord.getLocalSpi()},
                 ((IkeDeletePayload) respPayloadList.get(0)).spisToDelete);
 
-        verifyNotifyUsersDeleteSession();
+        verifyNotifyUsersDeleteSession(mChildSessionStateMachine.mDeleteChildRemoteDelete);
     }
 
     private void verifyOutboundRekeySaPayload(List<IkePayload> outboundPayloads, boolean isResp) {
@@ -1324,7 +1356,7 @@ public final class ChildSessionStateMachineTest {
     }
 
     private <T extends IkeException> void verifyIkeSessionFatalErrorAndSendOutboundIkeDeletePayload(
-            Class<T> exceptionClass) {
+            Class<T> exceptionClass, IState expectedState, int expectedErrorCode) {
         verifySendOutboundIkeDeleteRequest();
 
         // Verify callback onFatalIkeSessionError() has been invoked
@@ -1332,6 +1364,11 @@ public final class ChildSessionStateMachineTest {
 
         // Verify retry was not scheduled
         verify(mMockChildSessionSmCallback, never()).scheduleRetryLocalRequest(any());
+
+        verifyMetricsLogged(
+                IkeMetricsInterface.IKE_SESSION_TERMINATED__SESSION_TYPE__SESSION_CHILD,
+                getStateCode(expectedState),
+                expectedErrorCode);
     }
 
     @Test
@@ -1349,7 +1386,11 @@ public final class ChildSessionStateMachineTest {
                 Arrays.asList(new IkeNotifyPayload(ERROR_TYPE_NO_ADDITIONAL_SAS)));
         mLooper.dispatchAll();
 
-        verifyIkeSessionFatalErrorAndSendOutboundIkeDeletePayload(NoAdditionalSasException.class);
+        verifyIkeSessionFatalErrorAndSendOutboundIkeDeletePayload(
+                NoAdditionalSasException.class,
+                mChildSessionStateMachine.mMobikeRekeyChildLocalCreate,
+                IkeMetricsInterface
+                        .IKE_SESSION_TERMINATED__IKE_ERROR__ERROR_PROTOCOL_NO_ADDITIONAL_SAS);
     }
 
     @Test
@@ -1375,7 +1416,11 @@ public final class ChildSessionStateMachineTest {
         mChildSessionStateMachine.receiveResponse(EXCHANGE_TYPE_CREATE_CHILD_SA, respPayloads);
         mLooper.dispatchAll();
 
-        verifyIkeSessionFatalErrorAndSendOutboundIkeDeletePayload(IkeException.class);
+        verifyIkeSessionFatalErrorAndSendOutboundIkeDeletePayload(
+                IkeException.class,
+                mChildSessionStateMachine.mMobikeRekeyChildLocalCreate,
+                IkeMetricsInterface
+                        .IKE_SESSION_TERMINATED__IKE_ERROR__ERROR_PROTOCOL_INVALID_SYNTAX);
     }
 
     @Test
@@ -1417,12 +1462,14 @@ public final class ChildSessionStateMachineTest {
 
         // Verify Delete response was sent, users were notified and statemachine is still running
         verifyOutboundDeletePayload(mSpyCurrentChildSaRecord.getLocalSpi(), true /*isResp*/);
-        verifyNotifyUsersDeleteSession();
+        verifyNotifyUsersDeleteSession(
+                mSpyUserCbExecutor, mChildSessionStateMachine.mRekeyChildLocalCreate);
         assertNotNull(mChildSessionStateMachine.getCurrentState());
 
         // Receive Rekey Create response and verify Child Session is closed
         List<IkePayload> rekeyRespPayloads = receiveRekeyChildResponse();
         assertNull(mChildSessionStateMachine.getCurrentState());
+        verifyNoMoreInteractions(mIkeMetrics);
     }
 
     @Test
@@ -1450,7 +1497,12 @@ public final class ChildSessionStateMachineTest {
         mLooper.dispatchAll();
 
         // Verify user was notified and state machine has quit.
-        verifyNotifyUsersDeleteSession(mSpyUserCbExecutor, InvalidSyntaxException.class);
+        verifyNotifyUsersDeleteSession(
+                mSpyUserCbExecutor,
+                mChildSessionStateMachine.mRekeyChildLocalCreate,
+                InvalidSyntaxException.class,
+                IkeMetricsInterface
+                        .IKE_SESSION_TERMINATED__IKE_ERROR__ERROR_PROTOCOL_INVALID_SYNTAX);
 
         // Verify no SPI for provisional Child was registered.
         verify(mMockChildSessionSmCallback, never())
@@ -1491,7 +1543,11 @@ public final class ChildSessionStateMachineTest {
         mLooper.dispatchAll();
 
         // Verify user was notified and state machine has quit.
-        verifyNotifyUsersDeleteSession(mSpyUserCbExecutor, IkeInternalException.class);
+        verifyNotifyUsersDeleteSession(
+                mSpyUserCbExecutor,
+                mChildSessionStateMachine.mRekeyChildLocalCreate,
+                IkeInternalException.class,
+                IkeMetricsInterface.IKE_SESSION_TERMINATED__IKE_ERROR__ERROR_INTERNAL);
 
         // Verify SPI for provisional Child was registered and unregistered.
         verify(mMockChildSessionSmCallback)
@@ -1984,6 +2040,7 @@ public final class ChildSessionStateMachineTest {
         verifyNotifyUserDeleteChildSa(mSpyLocalInitNewChildSaRecord);
 
         verify(mMockChildSessionCallback).onClosed();
+        verify(mIkeMetrics, never()).logSessionTerminated(anyInt(), anyInt(), anyInt(), anyInt());
     }
 
     @Test
@@ -2096,7 +2153,10 @@ public final class ChildSessionStateMachineTest {
                 SK_D);
         mLooper.dispatchAll();
 
-        verifyHandleFatalErrorAndQuit(IkeInternalException.class);
+        verifyHandleFatalErrorAndQuit(
+                mChildSessionStateMachine.mCreateChildLocalCreate,
+                IkeInternalException.class,
+                IkeMetricsInterface.IKE_SESSION_TERMINATED__IKE_ERROR__ERROR_INTERNAL);
         verify(spyIkeLog).wtf(anyString(), anyString(), any(RuntimeException.class));
     }
 

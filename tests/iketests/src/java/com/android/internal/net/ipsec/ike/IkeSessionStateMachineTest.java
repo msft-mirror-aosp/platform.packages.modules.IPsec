@@ -211,7 +211,9 @@ import com.android.internal.net.ipsec.test.ike.net.IkeNetworkCallbackBase;
 import com.android.internal.net.ipsec.test.ike.net.IkeSpecificNetworkCallback;
 import com.android.internal.net.ipsec.test.ike.testmode.DeterministicSecureRandom;
 import com.android.internal.net.ipsec.test.ike.testutils.CertUtils;
+import com.android.internal.net.ipsec.test.ike.utils.IState;
 import com.android.internal.net.ipsec.test.ike.utils.IkeAlarm.IkeAlarmConfig;
+import com.android.internal.net.ipsec.test.ike.utils.IkeMetricsInterface;
 import com.android.internal.net.ipsec.test.ike.utils.IkeSecurityParameterIndex;
 import com.android.internal.net.ipsec.test.ike.utils.IkeSpiGenerator;
 import com.android.internal.net.ipsec.test.ike.utils.RandomnessFactory;
@@ -1589,15 +1591,28 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         }).when(network).getAllByName(REMOTE_HOSTNAME);
     }
 
-    private void verifyFireCallbackOnDnsFailure(IkeSessionCallback callback) {
+    private void verifyIkeMetricsLogged(int stateCode, int exceptionCode) {
+        verifyMetricsLogged(
+                IkeMetricsInterface.IKE_SESSION_TERMINATED__SESSION_TYPE__SESSION_IKE,
+                stateCode,
+                exceptionCode);
+    }
+
+    private void verifyFireCallbackOnDnsFailure(IkeSessionCallback callback, IState expectedState) {
         if (SdkLevel.isAtLeastT()) {
             verify(callback).onClosedWithException(
                     argThat(e -> e instanceof IkeIOException
                             && e.getCause() instanceof UnknownHostException));
+            verifyIkeMetricsLogged(
+                    getStateCode(expectedState),
+                    IkeMetricsInterface.IKE_SESSION_TERMINATED__IKE_ERROR__ERROR_IO_DNS_FAILURE);
         } else {
             verify(callback).onClosedWithException(
                     argThat(e -> e instanceof IkeInternalException
                             && e.getCause() instanceof IOException));
+            verifyIkeMetricsLogged(
+                    getStateCode(expectedState),
+                    IkeMetricsInterface.IKE_SESSION_TERMINATED__IKE_ERROR__ERROR_INTERNAL);
         }
     }
 
@@ -1626,7 +1641,8 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         verify(mMockDefaultNetwork, times(expectedDnsLookups)).getAllByName(REMOTE_HOSTNAME);
         if (expectSessionClosed) {
             assertNull(mIkeSessionStateMachine.getCurrentState());
-            verifyFireCallbackOnDnsFailure(mMockIkeSessionCallback);
+            verifyFireCallbackOnDnsFailure(
+                    mMockIkeSessionCallback, mIkeSessionStateMachine.mInitial);
         }
     }
 
@@ -2739,12 +2755,16 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         assertEquals(unrecognizedSpi, notifyPayload.spi);
     }
 
-    private void verifyNotifyUserCloseSession() {
+    private void verifyNotifyUserCloseSession(IState state) {
         verify(mSpyUserCbExecutor).execute(any(Runnable.class));
         verify(mMockIkeSessionCallback).onClosed();
+        verifyIkeMetricsLogged(
+                getStateCode(state),
+                IkeMetricsInterface.IKE_SESSION_TERMINATED__IKE_ERROR__ERROR_NONE);
     }
 
-    private void verifyNotifyUserCloseSessionWithException(Exception exception) {
+    private void verifyNotifyUserCloseSessionWithException(
+            IState state, Exception exception, boolean isErrorFromChild) {
         IkeException ikeException =
                 exception instanceof IkeException
                         ? (IkeException) exception
@@ -2753,6 +2773,13 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         verify(mSpyUserCbExecutor).execute(any(Runnable.class));
         verify(mMockIkeSessionCallback)
                 .onClosedWithException(argThat(e -> e.getCause() == ikeException.getCause()));
+
+        if (isErrorFromChild) {
+            verify(mIkeMetrics, never())
+                    .logSessionTerminated(anyInt(), anyInt(), anyInt(), anyInt());
+        } else {
+            verifyIkeMetricsLogged(getStateCode(state), ikeException.getMetricsErrorCode());
+        }
     }
 
     @Test
@@ -2765,7 +2792,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
         mLooper.dispatchAll();
 
-        verifyNotifyUserCloseSession();
+        verifyNotifyUserCloseSession(mIkeSessionStateMachine.mChildProcedureOngoing);
 
         // Verify state machine quit properly
         assertNull(mIkeSessionStateMachine.getCurrentState());
@@ -3314,7 +3341,9 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
         authRelatedPayloads.add(makeRespIdPayload(REMOTE_ID_IPV4));
 
-        sendAuthFailRespAndVerifyCloseIke(makeIkeAuthRespWithChildPayloads(authRelatedPayloads));
+        sendAuthFailRespAndVerifyCloseIke(
+                mIkeSessionStateMachine.mCreateIkeLocalIkeAuth,
+                makeIkeAuthRespWithChildPayloads(authRelatedPayloads));
     }
 
     @Test
@@ -3334,10 +3363,12 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         IkeIdPayload respIdPayload = makeRespIdPayload();
         authRelatedPayloads.add(respIdPayload);
 
-        sendAuthFailRespAndVerifyCloseIke(makeIkeAuthRespWithChildPayloads(authRelatedPayloads));
+        sendAuthFailRespAndVerifyCloseIke(
+                mIkeSessionStateMachine.mCreateIkeLocalIkeAuth,
+                makeIkeAuthRespWithChildPayloads(authRelatedPayloads));
     }
 
-    private void sendAuthFailRespAndVerifyCloseIke(ReceivedIkePacket authFailResp)
+    private void sendAuthFailRespAndVerifyCloseIke(IState state, ReceivedIkePacket authFailResp)
             throws Exception {
         // Send response to IKE state machine
         mIkeSessionStateMachine.sendMessage(
@@ -3353,6 +3384,11 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         assertNull(mIkeSessionStateMachine.getCurrentState());
         verify(mMockIkeSessionCallback)
                 .onClosedWithException(any(AuthenticationFailedException.class));
+
+        verifyIkeMetricsLogged(
+                getStateCode(state),
+                IkeMetricsInterface
+                        .IKE_SESSION_TERMINATED__IKE_ERROR__ERROR_PROTOCOL_AUTHENTICATION_FAILED);
     }
 
     @Test
@@ -5105,7 +5141,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         mLooper.dispatchAll();
         verifyIncrementLocaReqMsgId();
 
-        verifyNotifyUserCloseSession();
+        verifyNotifyUserCloseSession(mIkeSessionStateMachine.mDeleteIkeLocalDelete);
 
         // Verify state machine quit properly
         assertNull(mIkeSessionStateMachine.getCurrentState());
@@ -5213,10 +5249,10 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     public void testDeleteIkeRemoteDelete() throws Exception {
         setupIdleStateMachine();
 
-        verifyIkeDeleteRequestHandled();
+        verifyIkeDeleteRequestHandled(mIkeSessionStateMachine.mReceiving);
     }
 
-    private void verifyIkeDeleteRequestHandled() throws Exception {
+    private void verifyIkeDeleteRequestHandled(IState expectedState) throws Exception {
         mIkeSessionStateMachine.sendMessage(
                 IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET,
                 makeDeleteIkeRequest(mSpyCurrentIkeSaRecord));
@@ -5235,25 +5271,29 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
         assertTrue(delMsg.ikePayloadList.isEmpty());
 
-        verifyNotifyUserCloseSession();
+        verifyNotifyUserCloseSession(expectedState);
 
         // Verify state machine quit properly
         assertNull(mIkeSessionStateMachine.getCurrentState());
     }
 
-    private void verifySessionKilled(boolean hasDeleteRequestSent) {
-        verifySessionKilledWithException(hasDeleteRequestSent, null);
+    private void verifySessionKilled(IState state, boolean hasDeleteRequestSent) {
+        verifySessionKilledWithException(
+                state, hasDeleteRequestSent, null, false /* isErrorFromChild */);
     }
 
     private void verifySessionKilledWithException(
-            boolean hasDeleteRequestSent, Exception exception) {
+            IState state,
+            boolean hasDeleteRequestSent,
+            Exception exception,
+            boolean isErrorFromChild) {
         verify(mSpyCurrentIkeSaRecord).close();
         verify(mMockCurrentIkeSocket).unregisterIke(mSpyCurrentIkeSaRecord.getInitiatorSpi());
 
         if (exception != null) {
-            verifyNotifyUserCloseSessionWithException(exception);
+            verifyNotifyUserCloseSessionWithException(state, exception, isErrorFromChild);
         } else {
-            verifyNotifyUserCloseSession();
+            verifyNotifyUserCloseSession(state);
         }
 
         if (hasDeleteRequestSent) {
@@ -5282,7 +5322,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         mIkeSessionStateMachine.killSession();
         mLooper.dispatchAll();
 
-        verifySessionKilled(true /* hasDeleteRequestSent */);
+        verifySessionKilled(mIkeSessionStateMachine.mIdle, true /* hasDeleteRequestSent */);
     }
 
     @Test
@@ -5304,7 +5344,8 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         mIkeSessionStateMachine.killSession();
         mLooper.dispatchAll();
 
-        verifySessionKilled(false /* hasDeleteRequestSent */);
+        verifySessionKilled(
+                mIkeSessionStateMachine.mCreateIkeLocalIkeInit, false /* hasDeleteRequestSent */);
     }
 
     @Test
@@ -5317,7 +5358,11 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         mDummyChildSmCallback.onFatalIkeSessionError(exception);
         mLooper.dispatchAll();
 
-        verifySessionKilledWithException(false /* hasDeleteRequestSent */, exception);
+        verifySessionKilledWithException(
+                mIkeSessionStateMachine.mChildProcedureOngoing,
+                false /* hasDeleteRequestSent */,
+                exception,
+                true /* isErrorFromChild */);
     }
 
     @Test
@@ -6067,15 +6112,25 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
     @Test
     public void testIkeAuthWithBackoffTimerNetworkError() throws Exception {
-        verifyIkeAuthWithBackoffTimer(ERROR_TYPE_NETWORK_FAILURE);
+        verifyIkeAuthWithBackoffTimer(
+                ERROR_TYPE_NETWORK_FAILURE, UnrecognizedIkeProtocolException.class);
     }
 
     @Test
     public void testIkeAuthWithBackoffTimerNoApnSubscription() throws Exception {
-        verifyIkeAuthWithBackoffTimer(ERROR_TYPE_NO_APN_SUBSCRIPTION);
+        verifyIkeAuthWithBackoffTimer(
+                ERROR_TYPE_NO_APN_SUBSCRIPTION, UnrecognizedIkeProtocolException.class);
     }
 
-    private void verifyIkeAuthWithBackoffTimer(int expectedNotifyErrorCause) throws Exception {
+    @Test
+    public void testIkeAuthWithBackoffTimerAuthenticationFailed() throws Exception {
+        verifyIkeAuthWithBackoffTimer(
+                ERROR_TYPE_AUTHENTICATION_FAILED, AuthenticationFailedException.class);
+    }
+
+    private void verifyIkeAuthWithBackoffTimer(
+            int expectedNotifyErrorCause, Class<? extends IkeProtocolException> exceptionType)
+            throws Exception {
         // Quit and restart IKE Session with N1 Mode Capability params
         mIkeSessionStateMachine.quitNow();
         mIkeSessionStateMachine =
@@ -6095,8 +6150,19 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
         // Verify IKE Session is closed properly
         assertNull(mIkeSessionStateMachine.getCurrentState());
-        verify(mMockIkeSessionCallback)
-                .onClosedWithException(any(UnrecognizedIkeProtocolException.class));
+
+        // This exception is mapped to metrics error code:
+        int expectedError = expectedNotifyErrorCause;
+        if (expectedError == ERROR_TYPE_AUTHENTICATION_FAILED) {
+            expectedError =
+                    IkeMetricsInterface
+                            .IKE_SESSION_TERMINATED__IKE_ERROR__ERROR_PROTOCOL_AUTHENTICATION_FAILED;
+        }
+
+        verify(mMockIkeSessionCallback).onClosedWithException(any(exceptionType));
+
+        verifyIkeMetricsLogged(
+                getStateCode(mIkeSessionStateMachine.mCreateIkeLocalIkeAuth), expectedError);
 
         verifyBackoffTimer(expectedNotifyErrorCause);
     }
@@ -7196,7 +7262,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         // Reset to ignore IkeSessionCallback#onOpened from setting up the state machine
         resetSpyUserCbExecutor();
 
-        verifyIkeDeleteRequestHandled();
+        verifyIkeDeleteRequestHandled(mIkeSessionStateMachine.mMobikeLocalInfo);
     }
 
     @Test
@@ -7248,7 +7314,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         verify(newNetwork, times(expectedDnsLookups)).getAllByName(REMOTE_HOSTNAME);
         if (expectSessionClosed) {
             assertNull(mIkeSessionStateMachine.getCurrentState());
-            verifyFireCallbackOnDnsFailure(mMockIkeSessionCallback);
+            verifyFireCallbackOnDnsFailure(mMockIkeSessionCallback, mIkeSessionStateMachine.mIdle);
         } else {
             assertTrue(mSpyIkeConnectionCtrl.getAllRemoteIpv4Addresses().isEmpty());
             assertEquals(

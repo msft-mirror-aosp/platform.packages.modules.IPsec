@@ -19,6 +19,8 @@ package com.android.internal.net.ipsec.ike.net;
 import static android.net.NetworkCapabilities.TRANSPORT_CELLULAR;
 import static android.net.NetworkCapabilities.TRANSPORT_WIFI;
 import static android.net.ipsec.ike.IkeManager.getIkeLog;
+import static android.net.ipsec.ike.IkeSessionParams.ESP_ENCAP_TYPE_NONE;
+import static android.net.ipsec.ike.IkeSessionParams.ESP_ENCAP_TYPE_UDP;
 import static android.net.ipsec.ike.IkeSessionParams.ESP_IP_VERSION_AUTO;
 import static android.net.ipsec.ike.IkeSessionParams.ESP_IP_VERSION_IPV4;
 import static android.net.ipsec.ike.IkeSessionParams.ESP_IP_VERSION_IPV6;
@@ -132,7 +134,7 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
     private final boolean mForcePort4500;
     private final boolean mUseCallerConfiguredNetwork;
     private final String mRemoteHostname;
-    private final int mDscp = 0;
+    private final int mDscp;
     private final IkeSessionParams mIkeParams;
     // Must only be touched on the IkeSessionStateMachine thread.
     private IkeAlarmConfig mKeepaliveAlarmConfig;
@@ -193,6 +195,7 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
         mUseCallerConfiguredNetwork = config.ikeParams.getConfiguredNetwork() != null;
         mIpVersion = config.ikeParams.getIpVersion();
         mEncapType = config.ikeParams.getEncapType();
+        mDscp = config.ikeParams.getDscp();
         mUnderpinnedNetwork = null;
 
         if (mUseCallerConfiguredNetwork) {
@@ -370,23 +373,31 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
         return TAG + "_" + ikeSessionId;
     }
 
-    /** Starts NAT-T keepalive for current IkeUdpEncapSocket */
-    private IkeNattKeepalive buildAndStartNattKeepalive(IkeAlarmConfig keepaliveAlarmConfig)
-            throws IOException {
-        IkeNattKeepalive keepalive =
-                mDependencies.newIkeNattKeepalive(
-                        mIkeContext,
-                        new KeepaliveConfig(
-                                (Inet4Address) mLocalAddress,
-                                (Inet4Address) mRemoteAddress,
-                                ((IkeUdpEncapSocket) mIkeSocket).getUdpEncapsulationSocket(),
-                                mNetwork,
-                                mUnderpinnedNetwork,
-                                keepaliveAlarmConfig,
-                                mIkeParams,
-                                mNc));
+    /** Update the IKE NATT keepalive */
+    private void setupOrUpdateNattKeeaplive(IkeSocket ikeSocket) throws IOException {
+        if (!(ikeSocket instanceof IkeUdpEncapSocket)) {
+            if (mIkeNattKeepalive != null) {
+                mIkeNattKeepalive.stop();
+                mIkeNattKeepalive = null;
+            }
+            return;
+        }
 
-        return keepalive;
+        final KeepaliveConfig keepaliveConfig =
+                new KeepaliveConfig(
+                        (Inet4Address) mLocalAddress,
+                        (Inet4Address) mRemoteAddress,
+                        ((IkeUdpEncapSocket) ikeSocket).getUdpEncapsulationSocket(),
+                        mNetwork,
+                        mUnderpinnedNetwork,
+                        mKeepaliveAlarmConfig,
+                        mIkeParams);
+
+        if (mIkeNattKeepalive != null) {
+            mIkeNattKeepalive.restart(keepaliveConfig);
+        } else {
+            mIkeNattKeepalive = mDependencies.newIkeNattKeepalive(mIkeContext, keepaliveConfig);
+        }
     }
 
     private IkeSocket getIkeSocket(boolean isIpv4, boolean useEncapPort) throws IkeException {
@@ -431,9 +442,10 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
     private void getAndSwitchToIkeSocket(boolean isIpv4, boolean useEncapPort) throws IkeException {
         IkeSocket newSocket = getIkeSocket(isIpv4, useEncapPort);
 
-        if (mIkeNattKeepalive != null) {
-            mIkeNattKeepalive.stop();
-            mIkeNattKeepalive = null;
+        try {
+            setupOrUpdateNattKeeaplive(newSocket);
+        } catch (IOException e) {
+            throw wrapAsIkeException(e);
         }
 
         if (newSocket != mIkeSocket) {
@@ -442,14 +454,6 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
             }
             mIkeSocket.releaseReference(this);
             mIkeSocket = newSocket;
-        }
-
-        try {
-            if (mIkeSocket instanceof IkeUdpEncapSocket) {
-                mIkeNattKeepalive = buildAndStartNattKeepalive(mKeepaliveAlarmConfig);
-            }
-        } catch (IOException e) {
-            throw wrapAsIkeException(e);
         }
     }
 
@@ -490,9 +494,7 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
                             mNetwork, isIpv4, mRemoteAddress, remotePort);
             mIkeSocket = getIkeSocket(isIpv4, mForcePort4500);
 
-            if (mIkeSocket instanceof IkeUdpEncapSocket) {
-                mIkeNattKeepalive = buildAndStartNattKeepalive(mKeepaliveAlarmConfig);
-            }
+            setupOrUpdateNattKeeaplive(mIkeSocket);
         } catch (IOException | ErrnoException e) {
             throw wrapAsIkeException(e);
         }
@@ -644,7 +646,7 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
         final long keepaliveDelayMs = TimeUnit.SECONDS.toMillis(keepaliveDelaySeconds);
         if (keepaliveDelayMs != mKeepaliveAlarmConfig.delayMs) {
             mKeepaliveAlarmConfig = mKeepaliveAlarmConfig.buildCopyWithDelayMs(keepaliveDelayMs);
-            restartKeepaliveIfRunning(mKeepaliveAlarmConfig);
+            restartKeepaliveIfRunning();
         }
 
         // Switch to monitor a new network. This call is never expected to trigger a callback
@@ -657,18 +659,14 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
     public void onUnderpinnedNetworkSetByUser(final Network underpinnedNetwork)
             throws IkeException {
         mUnderpinnedNetwork = underpinnedNetwork;
-        restartKeepaliveIfRunning(mKeepaliveAlarmConfig);
+        restartKeepaliveIfRunning();
     }
 
-    private void restartKeepaliveIfRunning(final IkeAlarmConfig keepaliveAlarmConfig)
-            throws IkeException {
-        if (mIkeNattKeepalive != null) {
-            mIkeNattKeepalive.stop();
-            try {
-                mIkeNattKeepalive = buildAndStartNattKeepalive(keepaliveAlarmConfig);
-            } catch (IOException e) {
-                throw wrapAsIkeException(e);
-            }
+    private void restartKeepaliveIfRunning() throws IkeException {
+        try {
+            setupOrUpdateNattKeeaplive(mIkeSocket);
+        } catch (IOException e) {
+            throw wrapAsIkeException(e);
         }
     }
 
@@ -677,9 +675,20 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
         return mNetwork;
     }
 
+    /** Gets the underpinned network */
+    public Network getUnderpinnedNetwork() {
+        return mUnderpinnedNetwork;
+    }
+
     /** Check if mobility is enabled */
     public boolean isMobilityEnabled() {
         return mMobilityEnabled;
+    }
+
+    /** Differentiated Services Code Point information used at socket configuration */
+    @VisibleForTesting
+    public int getDscp() {
+        return mDscp;
     }
 
     /**
@@ -768,23 +777,16 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
 
         IkeSocket newSocket = getIkeSocket(true /* isIpv4 */, true /* useEncapPort */);
 
-        if (mIkeNattKeepalive != null) {
-            mIkeNattKeepalive.stop();
-            mIkeNattKeepalive = null;
+        try {
+            setupOrUpdateNattKeeaplive(newSocket);
+        } catch (IOException e) {
+            throw wrapAsIkeException(e);
         }
 
         if (newSocket != mIkeSocket) {
             migrateSpiToIkeSocket(localSpi, mIkeSocket, newSocket);
             mIkeSocket.releaseReference(this);
             mIkeSocket = newSocket;
-        }
-
-        try {
-            if (mIkeSocket instanceof IkeUdpEncapSocket) {
-                mIkeNattKeepalive = buildAndStartNattKeepalive(mKeepaliveAlarmConfig);
-            }
-        } catch (IOException e) {
-            throw wrapAsIkeException(e);
         }
     }
 
@@ -943,6 +945,8 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
         final boolean canConnectWithIpv6 =
                 !mRemoteAddressesV6.isEmpty() && linkProperties.hasGlobalIpv6Address();
 
+        adjustIpVersionPreference();
+
         if (isIpVersionRequired(ESP_IP_VERSION_IPV4)) {
             if (!canConnectWithIpv4) {
                 throw ShimUtils.getInstance().getDnsFailedException(
@@ -967,13 +971,39 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
         }
     }
 
+    private void adjustIpVersionPreference() {
+        // As ESP isn't supported on v4 and UDP isn't supported on v6, a request for ENCAP_UDP
+        // should force v4 and a request for ENCAP_NONE should force v6 when the family is set
+        // to auto.
+        // TODO : instead of fudging the arguments here, this should actually be taken into
+        // account when figuring out whether to send the NAT detection packet.
+        int adjustedIpVersion = mIpVersion;
+        if (mIpVersion == ESP_IP_VERSION_AUTO) {
+            if (mEncapType == ESP_ENCAP_TYPE_NONE) {
+                adjustedIpVersion = ESP_IP_VERSION_IPV6;
+            } else if (mEncapType == ESP_ENCAP_TYPE_UDP) {
+                adjustedIpVersion = ESP_IP_VERSION_IPV4;
+            }
+
+            if (adjustedIpVersion != mIpVersion) {
+                getIkeLog().i(TAG, "IP version preference is overridden from "
+                        + mIpVersion  + " to " + adjustedIpVersion);
+                mIpVersion = adjustedIpVersion;
+            }
+        }
+    }
+
     private boolean isIpVersionRequired(final int ipVersion) {
         return ipVersion == mIpVersion;
     }
 
     @VisibleForTesting
-    public static boolean isIpV4Preferred(IkeSessionParams ikeParams, NetworkCapabilities nc) {
-        return ikeParams.getIpVersion() == ESP_IP_VERSION_AUTO
+    public boolean isIpV4Preferred(IkeSessionParams ikeParams, NetworkCapabilities nc) {
+        // Note that in production code mIpVersion can't be == ESP_IP_VERSION_IPV4 because the
+        // only caller, selectAndSetRemoteAddress, would never call this method because
+        // isIpVersionRequired(ESP_IP_VERSION_IPV4) would return true. Still, it makes sense in
+        // this method to accept ESP_IP_VERSION_IPV4.
+        return (mIpVersion == ESP_IP_VERSION_AUTO || mIpVersion == ESP_IP_VERSION_IPV4)
                 && ikeParams.hasIkeOption(IKE_OPTION_AUTOMATIC_ADDRESS_FAMILY_SELECTION)
                 && nc.hasTransport(TRANSPORT_WIFI);
     }
