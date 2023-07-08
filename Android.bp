@@ -41,6 +41,7 @@ java_sdk_library {
         "framework-configinfrastructure",
         "framework-connectivity.stubs.module_lib",
         "framework-connectivity-t.stubs.module_lib",
+        "framework-statsd.stubs.module_lib",
     ],
     stub_only_libs: [
         "framework-connectivity.stubs.module_lib",
@@ -87,12 +88,15 @@ filegroup {
     srcs: [
         ":ike-internal-srcs",
         ":framework-ike-shared-srcs",
+        ":statslog-ike-java-gen",
     ],
 }
 
 filegroup {
     name: "ike-internal-srcs",
-    srcs: ["src/java/**/*.java"],
+    srcs: [
+        "src/java/**/*.java",
+    ],
     path: "src/java/",
 }
 
@@ -169,4 +173,12 @@ java_api_contribution {
     visibility: [
         "//build/orchestrator/apis",
     ],
+}
+
+genrule {
+    name: "statslog-ike-java-gen",
+    tools: ["stats-log-api-gen"],
+    cmd: "$(location stats-log-api-gen) --java $(out) --module ike" +
+         " --javaPackage com.android.internal.net.ipsec.ike.utils --javaClass IkeMetricsInterface",
+    out: ["com/android/internal/net/ipsec/ike/utils/IkeMetricsInterface.java"],
 }

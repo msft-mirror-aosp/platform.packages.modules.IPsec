@@ -62,6 +62,27 @@ public final class IkeSession implements AutoCloseable {
     private final CloseGuard mCloseGuard = new CloseGuard();
     private final Context mContext;
 
+    /**
+     * Attribution tag for IWLAN callers
+     *
+     * @hide
+     */
+    public static final String CONTEXT_ATTRIBUTION_TAG_IWLAN = "IWLAN";
+
+    /**
+     * Attribution tag for VCN callers
+     *
+     * @hide
+     */
+    public static final String CONTEXT_ATTRIBUTION_TAG_VCN = "VCN";
+
+    /**
+     * Attribution tag for VPN callers
+     *
+     * @hide
+     */
+    public static final String CONTEXT_ATTRIBUTION_TAG_VPN = "VPN";
+
     @VisibleForTesting final IkeSessionStateMachine mIkeSessionStateMachine;
 
     /**
