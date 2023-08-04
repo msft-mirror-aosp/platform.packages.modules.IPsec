@@ -607,15 +607,39 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
     private void verifyIsIpV4Preferred(
             boolean isAutoSelectionEnabled,
             int transportType,
-            boolean expected) throws Exception {
+            int originalIpVersion,
+            int updatedIpVersionOrMinusOne,
+            boolean expected)
+            throws Exception {
+        mIkeConnectionCtrl = buildIkeConnectionCtrl();
+        mIkeConnectionCtrl.setUp();
+        mIkeConnectionCtrl.enableMobility();
         final IkeSessionParams mockIkeParams = mock(IkeSessionParams.class);
         final NetworkCapabilities mockNc = mock(NetworkCapabilities.class);
         doReturn(isAutoSelectionEnabled).when(mockIkeParams)
                 .hasIkeOption(IKE_OPTION_AUTOMATIC_ADDRESS_FAMILY_SELECTION);
-        doReturn(ESP_IP_VERSION_AUTO).when(mockIkeParams).getIpVersion();
+        doReturn(originalIpVersion).when(mockIkeParams).getIpVersion();
         doReturn(true).when(mockNc).hasTransport(transportType);
 
-        assertEquals(expected, IkeConnectionController.isIpV4Preferred(mockIkeParams, mockNc));
+        if (updatedIpVersionOrMinusOne != -1) {
+            final Network n = new Network(100);
+            doReturn(mMockNetworkCapabilities).when(mMockConnectManager).getNetworkCapabilities(n);
+            doReturn(new LinkProperties()).when(mMockConnectManager).getLinkProperties(n);
+            mIkeConnectionCtrl.onNetworkSetByUser(
+                    new Network(100),
+                    updatedIpVersionOrMinusOne,
+                    ESP_ENCAP_TYPE_AUTO,
+                    300 /* keepaliveDelaySeconds */);
+        }
+
+        assertEquals(expected, mIkeConnectionCtrl.isIpV4Preferred(mockIkeParams, mockNc));
+        mIkeConnectionCtrl.tearDown();
+    }
+
+    private void verifyIsIpV4Preferred(
+            boolean isAutoSelectionEnabled, int transportType, boolean expected) throws Exception {
+        verifyIsIpV4Preferred(
+                isAutoSelectionEnabled, transportType, ESP_IP_VERSION_AUTO, -1, expected);
     }
 
     @Test
@@ -638,12 +662,81 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
         verifyIsIpV4Preferred(false /* autoEnabled */, TRANSPORT_CELLULAR, false /* expected */);
     }
 
+    private void verifyIsIpV4Preferred(
+            int transportType,
+            int originalIpVersion,
+            int updatedIpVersionOrMinusOne,
+            boolean expected)
+            throws Exception {
+        verifyIsIpV4Preferred(
+                true /* isAutoSelectionEnabled */,
+                transportType,
+                originalIpVersion,
+                updatedIpVersionOrMinusOne,
+                expected);
+    }
+
+    @Test
+    public void testIsIpV4Preferred_AutoToAuto_Wifi() throws Exception {
+        verifyIsIpV4Preferred(
+                TRANSPORT_WIFI, ESP_IP_VERSION_AUTO, ESP_IP_VERSION_AUTO, true /* expected */);
+    }
+
+    @Test
+    public void testIsIpV4Preferred_AutoToAuto_Cell() throws Exception {
+        verifyIsIpV4Preferred(
+                TRANSPORT_CELLULAR, ESP_IP_VERSION_AUTO, ESP_IP_VERSION_AUTO, false /* expected */);
+    }
+
+    @Test
+    public void testIsIpV4Preferred_AutoToV4() throws Exception {
+        verifyIsIpV4Preferred(
+                TRANSPORT_WIFI, ESP_IP_VERSION_AUTO, ESP_IP_VERSION_IPV4, true /* expected */);
+    }
+
+    @Test
+    public void testIsIpV4Preferred_AutoToV6() throws Exception {
+        verifyIsIpV4Preferred(
+                TRANSPORT_WIFI, ESP_IP_VERSION_AUTO, ESP_IP_VERSION_IPV6, false /* expected */);
+    }
+
+    @Test
+    public void testIsIpV4Preferred_V6ToVAuto() throws Exception {
+        verifyIsIpV4Preferred(
+                TRANSPORT_WIFI, ESP_IP_VERSION_IPV6, ESP_IP_VERSION_AUTO, true /* expected */);
+    }
+
+    @Test
+    public void testIsIpV4Preferred_V4ToV4() throws Exception {
+        verifyIsIpV4Preferred(
+                TRANSPORT_WIFI, ESP_IP_VERSION_IPV4, ESP_IP_VERSION_IPV4, true /* expected */);
+    }
+
+    @Test
+    public void testIsIpV4Preferred_V4ToV6() throws Exception {
+        verifyIsIpV4Preferred(
+                TRANSPORT_WIFI, ESP_IP_VERSION_IPV4, ESP_IP_VERSION_IPV6, false /* expected */);
+    }
+
+    @Test
+    public void testIsIpV4Preferred_V6ToV4() throws Exception {
+        verifyIsIpV4Preferred(
+                TRANSPORT_WIFI, ESP_IP_VERSION_IPV6, ESP_IP_VERSION_IPV4, true /* expected */);
+    }
+
+    @Test
+    public void testIsIpV4Preferred_V6ToV6() throws Exception {
+        verifyIsIpV4Preferred(
+                TRANSPORT_WIFI, ESP_IP_VERSION_IPV6, ESP_IP_VERSION_IPV6, false /* expected */);
+    }
+
     private void verifyUsedIpVersion(
             int requiredIpVersion,
             boolean isAutoSelectionEnabled,
             int transportType,
             boolean v4Available,
-            int expectedIpVersion) throws Exception {
+            int expectedIpVersion)
+            throws Exception {
         mMockIkeParams = mock(IkeSessionParams.class);
         final NetworkCapabilities mockNc = mock(NetworkCapabilities.class);
 
@@ -675,8 +768,9 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
         assertEquals(expectedIpVersion, result);
 
         if (ESP_IP_VERSION_AUTO == requiredIpVersion) {
-            verify(mMockIkeParams).hasIkeOption(IKE_OPTION_AUTOMATIC_ADDRESS_FAMILY_SELECTION);
-            if (isAutoSelectionEnabled) verify(mockNc).hasTransport(TRANSPORT_WIFI);
+            verify(mMockIkeParams, atLeastOnce())
+                    .hasIkeOption(IKE_OPTION_AUTOMATIC_ADDRESS_FAMILY_SELECTION);
+            if (isAutoSelectionEnabled) verify(mockNc, atLeastOnce()).hasTransport(TRANSPORT_WIFI);
         } else {
             verify(mMockIkeParams, never())
                     .hasIkeOption(IKE_OPTION_AUTOMATIC_ADDRESS_FAMILY_SELECTION);
@@ -1326,5 +1420,194 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
         mIkeConnectionCtrl.onUnderpinnedNetworkSetByUser(underpinnedNetwork);
         verifyKeepalive(true /* hasOldKeepalive */, true /* isKeepaliveExpected */);
         assertEquals(underpinnedNetwork, mIkeConnectionCtrl.getUnderpinnedNetwork());
+    }
+
+    private void verifyIsDnsLookupRequired(
+            boolean isNetworkChanged,
+            boolean hasLocalV4,
+            boolean hasLocalV6,
+            boolean hasRemoteV4Cached,
+            boolean hasRemoteV6Cached,
+            boolean dnsExpected)
+            throws Exception {
+        final Network newNetwork = isNetworkChanged ? mock(Network.class) : mMockDefaultNetwork;
+
+        final Inet4Address localV4 = hasLocalV4 ? LOCAL_ADDRESS : null;
+        final Inet6Address localV6 = hasLocalV6 ? LOCAL_ADDRESS_V6 : null;
+        setupLocalAddressForNetwork(newNetwork, localV4, localV6);
+
+        mIkeConnectionCtrl.clearRemoteAddress();
+        if (hasRemoteV4Cached) {
+            mIkeConnectionCtrl.addRemoteAddress(REMOTE_ADDRESS);
+        }
+        if (hasRemoteV6Cached) {
+            mIkeConnectionCtrl.addRemoteAddress(REMOTE_ADDRESS_V6);
+        }
+
+        assertEquals(
+                dnsExpected,
+                mIkeConnectionCtrl.isDnsLookupRequiredWithGlobalRemoteAddress(
+                        mMockDefaultNetwork,
+                        newNetwork,
+                        mMockConnectManager.getLinkProperties(newNetwork)));
+    }
+
+    private void verifyIsDnsLookupRequired(
+            boolean hasLocalV4,
+            boolean hasLocalV6,
+            boolean hasRemoteV4Cached,
+            boolean hasRemoteV6Cached,
+            boolean dnsExpected)
+            throws Exception {
+        verifyIsDnsLookupRequired(
+                false /* isNetworkChanged */,
+                hasLocalV4,
+                hasLocalV6,
+                hasRemoteV4Cached,
+                hasRemoteV6Cached,
+                dnsExpected);
+    }
+
+    @Test
+    public void testIsDnsLookupRequired_NetworkChange() throws Exception {
+        verifyIsDnsLookupRequired(
+                true /* isNetworkChanged */,
+                true /* hasLocalV4 */,
+                true /* hasLocalV6 */,
+                true /* hasRemoteV4Cached */,
+                true /* hasRemoteV6Cached */,
+                true /* dnsExpected */);
+    }
+
+    @Test
+    public void testIsDnsLookupRequired_LocalV4V6_RemoteV4() throws Exception {
+        verifyIsDnsLookupRequired(
+                true /* hasLocalV4 */,
+                true /* hasLocalV6 */,
+                true /* hasRemoteV4Cached */,
+                false /* hasRemoteV6Cached */,
+                true /* dnsExpected */);
+    }
+
+    @Test
+    public void testIsDnsLookupRequired_LocalV4V6_RemoteV6() throws Exception {
+        verifyIsDnsLookupRequired(
+                true /* hasLocalV4 */,
+                true /* hasLocalV6 */,
+                false /* hasRemoteV4Cached */,
+                true /* hasRemoteV6Cached */,
+                true /* dnsExpected */);
+    }
+
+    @Test
+    public void testIsDnsLookupRequired_LocalV4_RemoteV6() throws Exception {
+        verifyIsDnsLookupRequired(
+                true /* hasLocalV4 */,
+                false /* hasLocalV6 */,
+                false /* hasRemoteV4Cached */,
+                true /* hasRemoteV6Cached */,
+                true /* dnsExpected */);
+    }
+
+    @Test
+    public void testIsDnsLookupRequired_LocalV6_RemoteV4() throws Exception {
+        verifyIsDnsLookupRequired(
+                false /* hasLocalV4 */,
+                true /* hasLocalV6 */,
+                true /* hasRemoteV4Cached */,
+                false /* hasRemoteV6Cached */,
+                true /* dnsExpected */);
+    }
+
+    @Test
+    public void testIsDnsLookupRequired_LocalNone_RemoteV4() throws Exception {
+        verifyIsDnsLookupRequired(
+                false /* hasLocalV4 */,
+                false /* hasLocalV6 */,
+                true /* hasRemoteV4Cached */,
+                false /* hasRemoteV6Cached */,
+                true /* dnsExpected */);
+    }
+
+    @Test
+    public void testIsDnsLookupRequired_LocalV6_RemoteNone() throws Exception {
+        verifyIsDnsLookupRequired(
+                false /* hasLocalV4 */,
+                true /* hasLocalV6 */,
+                false /* hasRemoteV4Cached */,
+                false /* hasRemoteV6Cached */,
+                true /* dnsExpected */);
+    }
+
+    @Test
+    public void testIsDnsLookupRequired_LocalNone_RemoteNone() throws Exception {
+        verifyIsDnsLookupRequired(
+                false /* hasLocalV4 */,
+                false /* hasLocalV6 */,
+                false /* hasRemoteV4Cached */,
+                false /* hasRemoteV6Cached */,
+                true /* dnsExpected */);
+    }
+
+    @Test
+    public void testIsDnsLookupRequired_LocalV4_RemoteV4() throws Exception {
+        verifyIsDnsLookupRequired(
+                true /* hasLocalV4 */,
+                false /* hasLocalV6 */,
+                true /* hasRemoteV4Cached */,
+                false /* hasRemoteV6Cached */,
+                false /* dnsExpected */);
+    }
+
+    @Test
+    public void testIsDnsLookupRequired_LocalV6_RemoteV6() throws Exception {
+        verifyIsDnsLookupRequired(
+                false /* hasLocalV4 */,
+                true /* hasLocalV6 */,
+                false /* hasRemoteV4Cached */,
+                true /* hasRemoteV6Cached */,
+                false /* dnsExpected */);
+    }
+
+    @Test
+    public void testIsDnsLookupRequired_LocalV4V6_RemoteV4V6() throws Exception {
+        verifyIsDnsLookupRequired(
+                true /* hasLocalV4 */,
+                true /* hasLocalV6 */,
+                true /* hasRemoteV4Cached */,
+                true /* hasRemoteV6Cached */,
+                false /* dnsExpected */);
+    }
+
+    private void verifyDnsLookupWithCachedIpv6Address(boolean isNat64, boolean dnsExpected)
+            throws Exception {
+        reset(mMockDefaultNetwork);
+        setupLocalAddressForNetwork(mMockDefaultNetwork, LOCAL_ADDRESS_V6);
+        setupRemoteAddressForNetwork(mMockDefaultNetwork, REMOTE_ADDRESS_V6);
+
+        mIkeConnectionCtrl.clearRemoteAddress();
+        mIkeConnectionCtrl.addRemoteAddressV6(REMOTE_ADDRESS_V6, isNat64);
+
+        IkeNetworkCallbackBase callback = enableMobilityAndReturnCb(true /* isDefaultNetwork */);
+        mIkeConnectionCtrl.onUnderlyingNetworkUpdated(
+                mMockDefaultNetwork,
+                mMockConnectManager.getLinkProperties(mMockDefaultNetwork),
+                mMockNetworkCapabilities);
+
+        if (dnsExpected) {
+            verify(mMockDefaultNetwork).getAllByName(anyString());
+        } else {
+            verify(mMockDefaultNetwork, never()).getAllByName(anyString());
+        }
+    }
+
+    @Test
+    public void testOnUnderlyingNetworkUpdatedWithGlobalV6Address() throws Exception {
+        verifyDnsLookupWithCachedIpv6Address(false /* isNat64 */, false /* dnsExpected */);
+    }
+
+    @Test
+    public void testOnUnderlyingNetworkUpdatedWithNat64V6Address() throws Exception {
+        verifyDnsLookupWithCachedIpv6Address(true /* isNat64 */, true /* dnsExpected */);
     }
 }
