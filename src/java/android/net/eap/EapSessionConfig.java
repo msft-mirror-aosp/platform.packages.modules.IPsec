@@ -242,7 +242,7 @@ public final class EapSessionConfig {
          * Sets the configuration for EAP SIM.
          *
          * @param subId int the client's subId to be authenticated.
-         * @param apptype the {@link UiccAppType} apptype to be used for authentication.
+         * @param apptype the apptype to be used for authentication.
          * @return Builder this, to facilitate chaining.
          */
         @NonNull
@@ -255,7 +255,7 @@ public final class EapSessionConfig {
          * Sets the configuration for EAP AKA.
          *
          * @param subId int the client's subId to be authenticated.
-         * @param apptype the {@link UiccAppType} apptype to be used for authentication.
+         * @param apptype the apptype to be used for authentication.
          * @return Builder this, to facilitate chaining.
          */
         @NonNull
@@ -268,7 +268,7 @@ public final class EapSessionConfig {
          * Sets the configuration for EAP AKA with options.
          *
          * @param subId int the client's subId to be authenticated.
-         * @param apptype the {@link UiccAppType} apptype to be used for authentication.
+         * @param apptype the apptype to be used for authentication.
          * @param options optional configuration for EAP AKA
          * @return Builder this, to facilitate chaining.
          */
@@ -284,7 +284,7 @@ public final class EapSessionConfig {
          * Sets the configuration for EAP AKA'.
          *
          * @param subId int the client's subId to be authenticated.
-         * @param apptype the {@link UiccAppType} apptype to be used for authentication.
+         * @param apptype the apptype to be used for authentication.
          * @param networkName String the network name to be used for authentication.
          * @param allowMismatchedNetworkNames indicates whether the EAP library can ignore potential
          *     mismatches between the given network name and that received in an EAP-AKA' session.
