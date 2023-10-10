@@ -1,6 +1,8 @@
-# Bug component: 827526
+# Bug component: 1364804
 set noparent
 
-lorenzo@google.com
-nharold@google.com
-satk@google.com
+amruthr@google.com
+jackyu@google.com
+rgreenwalt@google.com #{LAST_RESORT_SUGGESTION}
+
+nharold@google.com #{LAST_RESORT_SUGGESTION}
