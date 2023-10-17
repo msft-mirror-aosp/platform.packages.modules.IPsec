@@ -3,3 +3,23 @@ UnflaggedApi: android.net.eap.EapSessionConfig.EapAkaConfig:
     New API must be flagged with @FlaggedApi: class android.net.eap.EapSessionConfig.EapAkaConfig
 UnflaggedApi: android.net.eap.EapSessionConfig.EapSimConfig:
     New API must be flagged with @FlaggedApi: class android.net.eap.EapSessionConfig.EapSimConfig
+UnflaggedApi: android.net.ipsec.ike.IkeSession#requestLivenessCheck():
+    New API must be flagged with @FlaggedApi: method android.net.ipsec.ike.IkeSession.requestLivenessCheck()
+UnflaggedApi: android.net.ipsec.ike.IkeSessionCallback#LIVENESS_STATUS_BACKGROUND_ONGOING:
+    New API must be flagged with @FlaggedApi: field android.net.ipsec.ike.IkeSessionCallback.LIVENESS_STATUS_BACKGROUND_ONGOING
+UnflaggedApi: android.net.ipsec.ike.IkeSessionCallback#LIVENESS_STATUS_BACKGROUND_STARTED:
+    New API must be flagged with @FlaggedApi: field android.net.ipsec.ike.IkeSessionCallback.LIVENESS_STATUS_BACKGROUND_STARTED
+UnflaggedApi: android.net.ipsec.ike.IkeSessionCallback#LIVENESS_STATUS_FAILURE:
+    New API must be flagged with @FlaggedApi: field android.net.ipsec.ike.IkeSessionCallback.LIVENESS_STATUS_FAILURE
+UnflaggedApi: android.net.ipsec.ike.IkeSessionCallback#LIVENESS_STATUS_ON_DEMAND_ONGOING:
+    New API must be flagged with @FlaggedApi: field android.net.ipsec.ike.IkeSessionCallback.LIVENESS_STATUS_ON_DEMAND_ONGOING
+UnflaggedApi: android.net.ipsec.ike.IkeSessionCallback#LIVENESS_STATUS_ON_DEMAND_STARTED:
+    New API must be flagged with @FlaggedApi: field android.net.ipsec.ike.IkeSessionCallback.LIVENESS_STATUS_ON_DEMAND_STARTED
+UnflaggedApi: android.net.ipsec.ike.IkeSessionCallback#LIVENESS_STATUS_SUCCESS:
+    New API must be flagged with @FlaggedApi: field android.net.ipsec.ike.IkeSessionCallback.LIVENESS_STATUS_SUCCESS
+UnflaggedApi: android.net.ipsec.ike.IkeSessionCallback#onLivenessStatusChanged(int):
+    New API must be flagged with @FlaggedApi: method android.net.ipsec.ike.IkeSessionCallback.onLivenessStatusChanged(int)
+UnflaggedApi: android.net.ipsec.ike.IkeSessionParams#getLivenessRetransmissionTimeoutsMillis():
+    New API must be flagged with @FlaggedApi: method android.net.ipsec.ike.IkeSessionParams.getLivenessRetransmissionTimeoutsMillis()
+UnflaggedApi: android.net.ipsec.ike.IkeSessionParams.Builder#setLivenessRetransmissionTimeoutsMillis(int[]):
+    New API must be flagged with @FlaggedApi: method android.net.ipsec.ike.IkeSessionParams.Builder.setLivenessRetransmissionTimeoutsMillis(int[])
