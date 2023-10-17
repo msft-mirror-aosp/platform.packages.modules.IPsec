@@ -34,6 +34,11 @@ import static android.net.ipsec.test.ike.IkeSessionParams.IkeAuthDigitalSignLoca
 import static android.net.ipsec.test.ike.IkeSessionParams.IkeAuthDigitalSignRemoteConfig;
 import static android.net.ipsec.test.ike.IkeSessionParams.IkeAuthEapConfig;
 import static android.net.ipsec.test.ike.IkeSessionParams.IkeAuthPskConfig;
+import static android.net.ipsec.test.ike.IkeSessionParams.LIVENESS_RETRANS_MAX_ATTEMPTS_MAX;
+import static android.net.ipsec.test.ike.IkeSessionParams.LIVENESS_RETRANS_TIMEOUT_MS_LIST_DEFAULT;
+import static android.net.ipsec.test.ike.IkeSessionParams.LIVENESS_RETRANS_TIMEOUT_MS_MAX;
+import static android.net.ipsec.test.ike.IkeSessionParams.LIVENESS_RETRANS_TIMEOUT_MS_MIN;
+import static android.net.ipsec.test.ike.IkeSessionParams.LIVENESS_RETRANS_TIMEOUT_MS_TOTAL;
 import static android.system.OsConstants.AF_INET;
 import static android.system.OsConstants.AF_INET6;
 
@@ -976,5 +981,130 @@ public final class IkeSessionParamsTest {
         IkeSessionParams sessionParamsB = createIkeParamsBuilderMinimum().setDscp(48).build();
 
         assertNotEquals(sessionParamsA, sessionParamsB);
+    }
+
+    @Test
+    public void testBuildWithPskAndLivenessRetransmission() throws Exception {
+        final int[] retransmissionTimeoutList = new int[] {1000, 2000, 3000, 4000};
+        final int[] livenessRetransmissionTimeoutList = new int[] {4000, 3000, 2000, 1000};
+
+        IkeSessionParams.Builder builder =
+                buildWithPskCommon(REMOTE_IPV4_HOST_ADDRESS)
+                        .setRetransmissionTimeoutsMillis(retransmissionTimeoutList);
+        IkeSessionParams sessionParams = builder.build();
+
+        verifyIkeSessionParamsCommon(sessionParams);
+        verifyAuthPskConfig(sessionParams);
+
+        // Verify retransmission configuration
+        assertEquals(retransmissionTimeoutList, sessionParams.getRetransmissionTimeoutsMillis());
+
+        // Verify retransmission configuration
+        assertArrayEquals(
+                LIVENESS_RETRANS_TIMEOUT_MS_LIST_DEFAULT,
+                sessionParams.getLivenessRetransmissionTimeoutsMillis());
+
+        builder.setLivenessRetransmissionTimeoutsMillis(livenessRetransmissionTimeoutList);
+        sessionParams = builder.build();
+
+        verifyIkeSessionParamsCommon(sessionParams);
+        verifyAuthPskConfig(sessionParams);
+
+        // Verify retransmission configuration
+        assertEquals(retransmissionTimeoutList, sessionParams.getRetransmissionTimeoutsMillis());
+
+        // Verify retransmission configuration
+        assertArrayEquals(
+                livenessRetransmissionTimeoutList,
+                sessionParams.getLivenessRetransmissionTimeoutsMillis());
+    }
+
+    @Test
+    public void testBuildWithInvalidLivenessRetransmissionTimeout() throws Exception {
+        final int[] invalidRetransTimeoutMsListMaxInt =
+                new int[] {1000, 2000, 3000, Integer.MAX_VALUE};
+        final int[] invalidRetransTimeoutMsListMoreThanMaxTimeout =
+                new int[] {1000, 2000, 3000, LIVENESS_RETRANS_TIMEOUT_MS_MAX + 1};
+        final int[] invalidRetransTimeoutMsListLessThanMinTimeout =
+                new int[] {LIVENESS_RETRANS_TIMEOUT_MS_MIN - 1, 2000, 3000, 4000};
+        try {
+            new IkeSessionParams.Builder(mMockConnectManager)
+                    .setLivenessRetransmissionTimeoutsMillis(invalidRetransTimeoutMsListMaxInt);
+            fail("Expected to fail due to invalid retransmission timeout");
+        } catch (IllegalArgumentException expected) {
+        }
+        try {
+            new IkeSessionParams.Builder(mMockConnectManager)
+                    .setLivenessRetransmissionTimeoutsMillis(
+                            invalidRetransTimeoutMsListMoreThanMaxTimeout);
+            fail("Expected to fail due to invalid retransmission timeout");
+        } catch (IllegalArgumentException expected) {
+        }
+        try {
+            new IkeSessionParams.Builder(mMockConnectManager)
+                    .setLivenessRetransmissionTimeoutsMillis(
+                            invalidRetransTimeoutMsListLessThanMinTimeout);
+            fail("Expected to fail due to invalid retransmission timeout");
+        } catch (IllegalArgumentException expected) {
+        }
+    }
+
+    @Test
+    public void testBuildWithInvalidMaxLivenessRetransmissionAttempts() throws Exception {
+        final int[] validRetransTimeoutMsList = new int[LIVENESS_RETRANS_MAX_ATTEMPTS_MAX];
+        final int[] invalidRetransTimeoutMsList = new int[LIVENESS_RETRANS_MAX_ATTEMPTS_MAX + 1];
+        Arrays.fill(validRetransTimeoutMsList, LIVENESS_RETRANS_TIMEOUT_MS_MIN);
+        Arrays.fill(invalidRetransTimeoutMsList, LIVENESS_RETRANS_TIMEOUT_MS_MIN);
+
+        new IkeSessionParams.Builder(mMockConnectManager)
+                .setLivenessRetransmissionTimeoutsMillis(validRetransTimeoutMsList);
+
+        try {
+            new IkeSessionParams.Builder(mMockConnectManager)
+                    .setLivenessRetransmissionTimeoutsMillis(invalidRetransTimeoutMsList);
+            fail("Expected to fail due to invalid max retransmission times");
+        } catch (IllegalArgumentException expected) {
+        }
+    }
+
+    @Test
+    public void testBuildWithInvalidTotalLivenessRetransmissionTimeouts() throws Exception {
+        final int[] validTotalRetransTimeoutMsList = new int[LIVENESS_RETRANS_MAX_ATTEMPTS_MAX];
+        final int[] invalidTotalRetransTimeoutMsList = new int[LIVENESS_RETRANS_MAX_ATTEMPTS_MAX];
+        Arrays.fill(
+                validTotalRetransTimeoutMsList,
+                LIVENESS_RETRANS_TIMEOUT_MS_TOTAL / LIVENESS_RETRANS_MAX_ATTEMPTS_MAX);
+        Arrays.fill(
+                invalidTotalRetransTimeoutMsList,
+                (LIVENESS_RETRANS_TIMEOUT_MS_TOTAL + LIVENESS_RETRANS_TIMEOUT_MS_MIN)
+                        / (LIVENESS_RETRANS_MAX_ATTEMPTS_MAX));
+
+        new IkeSessionParams.Builder(mMockConnectManager)
+                .setLivenessRetransmissionTimeoutsMillis(validTotalRetransTimeoutMsList);
+
+        try {
+            new IkeSessionParams.Builder(mMockConnectManager)
+                    .setLivenessRetransmissionTimeoutsMillis(invalidTotalRetransTimeoutMsList);
+            fail("Expected to fail due to invalid total retransmission times");
+        } catch (IllegalArgumentException expected) {
+        }
+    }
+
+    @Test
+    public void testBuildWithPacerableLivenessRetransmissionTimeouts() throws Exception {
+        final int[] validRetransTimeoutMsList = new int[LIVENESS_RETRANS_MAX_ATTEMPTS_MAX];
+        Arrays.fill(validRetransTimeoutMsList, LIVENESS_RETRANS_TIMEOUT_MS_MIN);
+
+        IkeSessionParams paramsToBundle =
+                buildWithPskCommon(REMOTE_IPV4_HOST_ADDRESS)
+                        .setLivenessRetransmissionTimeoutsMillis(validRetransTimeoutMsList)
+                        .build();
+
+        IkeSessionParams paramsFromBundle =
+                IkeSessionParams.fromPersistableBundle(paramsToBundle.toPersistableBundle());
+
+        assertEquals(
+                paramsToBundle.getLivenessRetransmissionTimeoutsMillis(),
+                paramsFromBundle.getLivenessRetransmissionTimeoutsMillis());
     }
 }
