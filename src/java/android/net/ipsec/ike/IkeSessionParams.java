@@ -399,6 +399,19 @@ public final class IkeSessionParams {
     static final int[] IKE_RETRANS_TIMEOUT_MS_LIST_DEFAULT =
             new int[] {500, 1000, 2000, 4000, 8000};
 
+    /** @hide */
+    @VisibleForTesting static final int LIVENESS_RETRANS_TIMEOUT_MS_MIN = 500;
+    /** @hide */
+    @VisibleForTesting static final int LIVENESS_RETRANS_TIMEOUT_MS_MAX = 30000;
+    /** @hide */
+    @VisibleForTesting static final int LIVENESS_RETRANS_TIMEOUT_MS_TOTAL = 30000;
+    /** @hide */
+    @VisibleForTesting static final int LIVENESS_RETRANS_MAX_ATTEMPTS_MAX = 10;
+    /** @hide */
+    @VisibleForTesting
+    static final int[] LIVENESS_RETRANS_TIMEOUT_MS_LIST_DEFAULT =
+            new int[] {500, 1000, 2000, 4000, 8000};
+
     private static final String SERVER_HOST_NAME_KEY = "mServerHostname";
     private static final String SA_PROPOSALS_KEY = "mSaProposals";
     private static final String LOCAL_ID_KEY = "mLocalIdentification";
@@ -407,6 +420,7 @@ public final class IkeSessionParams {
     private static final String REMOTE_AUTH_KEY = "mRemoteAuthConfig";
     private static final String CONFIG_ATTRIBUTES_KEY = "mConfigRequests";
     private static final String RETRANS_TIMEOUTS_KEY = "mRetransTimeoutMsList";
+    private static final String LIVENESS_RETRANS_TIMEOUTS_KEY = "mLivenessRetransTimeoutMsList";
     private static final String IKE_OPTIONS_KEY = "mIkeOptions";
     private static final String HARD_LIFETIME_SEC_KEY = "mHardLifetimeSec";
     private static final String SOFT_LIFETIME_SEC_KEY = "mSoftLifetimeSec";
@@ -441,6 +455,7 @@ public final class IkeSessionParams {
     @NonNull private final IkeConfigAttribute[] mConfigRequests;
 
     @NonNull private final int[] mRetransTimeoutMsList;
+    @NonNull private final int[] mLivenessRetransTimeoutMsList;
 
     @Nullable private final Ike3gppExtension mIke3gppExtension;
 
@@ -468,6 +483,7 @@ public final class IkeSessionParams {
             @NonNull IkeAuthConfig remoteAuthConfig,
             @NonNull IkeConfigAttribute[] configRequests,
             @NonNull int[] retransTimeoutMsList,
+            @NonNull int[] livenessRetransTimeoutMsList,
             @Nullable Ike3gppExtension ike3gppExtension,
             long ikeOptions,
             int hardLifetimeSec,
@@ -493,6 +509,7 @@ public final class IkeSessionParams {
         mConfigRequests = configRequests;
 
         mRetransTimeoutMsList = retransTimeoutMsList;
+        mLivenessRetransTimeoutMsList = livenessRetransTimeoutMsList;
 
         mIke3gppExtension = ike3gppExtension;
 
@@ -562,6 +579,8 @@ public final class IkeSessionParams {
         }
 
         builder.setRetransmissionTimeoutsMillis(in.getIntArray(RETRANS_TIMEOUTS_KEY));
+        builder.setLivenessRetransmissionTimeoutsMillis(
+                in.getIntArray(LIVENESS_RETRANS_TIMEOUTS_KEY));
 
         long ikeOptions = in.getLong(IKE_OPTIONS_KEY);
         for (int option = MIN_IKE_OPTION; option <= MAX_IKE_OPTION; option++) {
@@ -620,6 +639,7 @@ public final class IkeSessionParams {
         result.putPersistableBundle(CONFIG_ATTRIBUTES_KEY, configAttributeBundle);
 
         result.putIntArray(RETRANS_TIMEOUTS_KEY, mRetransTimeoutMsList);
+        result.putIntArray(LIVENESS_RETRANS_TIMEOUTS_KEY, mLivenessRetransTimeoutMsList);
         result.putLong(IKE_OPTIONS_KEY, mIkeOptions);
         result.putInt(HARD_LIFETIME_SEC_KEY, mHardLifetimeSec);
         result.putInt(SOFT_LIFETIME_SEC_KEY, mSoftLifetimeSec);
@@ -797,6 +817,25 @@ public final class IkeSessionParams {
     }
 
     /**
+     * Retrieves the relative retransmission timeout list for configuring on-demand liveness checks
+     * in milliseconds.
+     *
+     * <p>The on-demand liveness check uses the returned list of liveness retransmission timeouts
+     * set from {@link Builder#setLivenessRetransmissionTimeoutsMillis} or uses the default value of
+     * {0.5s, 1s, 2s, 4s, 8s} if no override is defined.
+     *
+     * <p>@see {@link Builder#setLivenessRetransmissionTimeoutsMillis} for more information about
+     * how the list is structured.
+     *
+     * @hide
+     */
+    @SystemApi
+    @NonNull
+    public int[] getLivenessRetransmissionTimeoutsMillis() {
+        return mLivenessRetransTimeoutMsList;
+    }
+
+    /**
      * Retrieves the configured Ike3gppExtension, or null if it was not set.
      *
      * @hide
@@ -867,6 +906,7 @@ public final class IkeSessionParams {
                 mIke3gppExtension,
                 Arrays.hashCode(mConfigRequests),
                 Arrays.hashCode(mRetransTimeoutMsList),
+                Arrays.hashCode(mLivenessRetransTimeoutMsList),
                 mIkeOptions,
                 mHardLifetimeSec,
                 mSoftLifetimeSec,
@@ -897,6 +937,7 @@ public final class IkeSessionParams {
                 && Objects.equals(mIke3gppExtension, other.mIke3gppExtension)
                 && Arrays.equals(mConfigRequests, other.mConfigRequests)
                 && Arrays.equals(mRetransTimeoutMsList, other.mRetransTimeoutMsList)
+                && Arrays.equals(mLivenessRetransTimeoutMsList, other.mLivenessRetransTimeoutMsList)
                 && mIkeOptions == other.mIkeOptions
                 && mHardLifetimeSec == other.mHardLifetimeSec
                 && mSoftLifetimeSec == other.mSoftLifetimeSec
@@ -1428,6 +1469,12 @@ public final class IkeSessionParams {
                         IKE_RETRANS_TIMEOUT_MS_LIST_DEFAULT,
                         IKE_RETRANS_TIMEOUT_MS_LIST_DEFAULT.length);
 
+        @NonNull
+        private int[] mLivenessRetransTimeoutMsList =
+                Arrays.copyOf(
+                        LIVENESS_RETRANS_TIMEOUT_MS_LIST_DEFAULT,
+                        LIVENESS_RETRANS_TIMEOUT_MS_LIST_DEFAULT.length);
+
         @NonNull private String mServerHostname;
         @Nullable private Network mCallerConfiguredNetwork;
 
@@ -1501,6 +1548,14 @@ public final class IkeSessionParams {
             int[] retransmissionTimeouts = ikeSessionParams.getRetransmissionTimeoutsMillis();
             mRetransTimeoutMsList =
                     Arrays.copyOf(retransmissionTimeouts, retransmissionTimeouts.length);
+
+            int[] livenessretransmissionTimeouts = ikeSessionParams.mLivenessRetransTimeoutMsList;
+            if (livenessretransmissionTimeouts != null) {
+                mLivenessRetransTimeoutMsList =
+                        Arrays.copyOf(
+                                livenessretransmissionTimeouts,
+                                livenessretransmissionTimeouts.length);
+            }
 
             mServerHostname = ikeSessionParams.getServerHostname();
             mCallerConfiguredNetwork = ikeSessionParams.getConfiguredNetwork();
@@ -2041,6 +2096,53 @@ public final class IkeSessionParams {
         }
 
         /**
+         * Sets a list of retransmission timeouts in milliseconds for performing on-demand liveness
+         * checks.
+         *
+         * <p>Provides the user the ability to set an array of relative retransmission timeouts for
+         * on-demand liveness checks in milliseconds. After sending out a request and before
+         * receiving the response, the IKE Session will iterate through the array and wait for the
+         * relative timeout before the next retry. If the last timeout is exceeded, the IKE Session
+         * will be terminated.
+         *
+         * <p>Each element in the array MUST be a value from 500 ms to 30000 ms. The length of the
+         * array MUST NOT exceed 10. The total retransmission timeouts MUST NOT exceed 30000 ms.
+         * This retransmission timeout list defaults to {0.5s, 1s, 2s, 4s, 8s}.
+         *
+         * @param retransTimeoutMillisList the array of relative retransmission timeout in
+         *     milliseconds for checking peer's liveness.
+         * @return Builder this, to facilitate chaining.
+         * @hide
+         */
+        @SystemApi
+        @NonNull
+        public Builder setLivenessRetransmissionTimeoutsMillis(
+                @NonNull int[] retransTimeoutMillisList) {
+            boolean isValid = true;
+            int totalTimeoutMs = 0;
+            if (retransTimeoutMillisList == null
+                    || retransTimeoutMillisList.length == 0
+                    || retransTimeoutMillisList.length > LIVENESS_RETRANS_MAX_ATTEMPTS_MAX) {
+                isValid = false;
+            }
+            for (int t : retransTimeoutMillisList) {
+                totalTimeoutMs += t;
+                if (t < LIVENESS_RETRANS_TIMEOUT_MS_MIN || t > LIVENESS_RETRANS_TIMEOUT_MS_MAX) {
+                    isValid = false;
+                }
+            }
+            if (totalTimeoutMs > LIVENESS_RETRANS_TIMEOUT_MS_TOTAL) {
+                isValid = false;
+            }
+
+            if (!isValid) {
+                throw new IllegalArgumentException("Invalid liveness retransmission timeout list.");
+            }
+            mLivenessRetransTimeoutMsList = retransTimeoutMillisList;
+            return this;
+        }
+
+        /**
          * Sets the parameters to be used for 3GPP-specific behavior during the IKE Session.
          *
          * <p>Setting the Ike3gppExtension also enables support for non-configurable payloads, such
@@ -2193,6 +2295,7 @@ public final class IkeSessionParams {
                     mRemoteAuthConfig,
                     mConfigRequestList.toArray(new IkeConfigAttribute[0]),
                     mRetransTimeoutMsList,
+                    mLivenessRetransTimeoutMsList,
                     mIke3gppExtension,
                     mIkeOptions,
                     mHardLifetimeSec,
