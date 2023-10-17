@@ -330,6 +330,9 @@ abstract class IkeSessionTestBase extends IkeTestNetworkBase {
         protected CompletableFuture<IkeException> mFutureOnClosedException =
                 new CompletableFuture<>();
 
+        private int mOnLivenessStatusCount = 0;
+        private ArrayTrackRecord<Integer> mOnLivenessStatusTrackRecord = new ArrayTrackRecord<>();
+
         @Override
         public void onOpened(@NonNull IkeSessionConfiguration sessionConfiguration) {
             mFutureIkeConfig.complete(sessionConfiguration);
@@ -351,6 +354,12 @@ abstract class IkeSessionTestBase extends IkeTestNetworkBase {
                 @NonNull IkeSessionConnectionInfo connectionInfo) {
             IkeSessionCallback.super.onIkeSessionConnectionInfoChanged(connectionInfo);
             mFutureConnectionConfig.complete(connectionInfo);
+        }
+
+        @Override
+        public void onLivenessStatusChanged(int livenessStatus) {
+            IkeSessionCallback.super.onLivenessStatusChanged(livenessStatus);
+            mOnLivenessStatusTrackRecord.add(livenessStatus);
         }
 
         public IkeSessionConfiguration awaitIkeConfig() throws Exception {
@@ -376,6 +385,15 @@ abstract class IkeSessionTestBase extends IkeTestNetworkBase {
 
         public IkeSessionConnectionInfo awaitOnIkeSessionConnectionInfoChanged() throws Exception {
             return mFutureConnectionConfig.get(TIMEOUT_MS, TimeUnit.MILLISECONDS);
+        }
+
+        public int awaitNextOnLivenessStatus() throws Exception {
+            return mOnLivenessStatusTrackRecord.poll(
+                    (long) TIMEOUT_MS,
+                    mOnLivenessStatusCount++,
+                    (transform) -> {
+                        return true;
+                    });
         }
     }
 
