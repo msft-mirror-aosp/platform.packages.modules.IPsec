@@ -87,6 +87,8 @@ public final class IkeSessionParamsTest extends IkeSessionTestBase {
     private static final int DPD_DELAY_SECONDS = (int) TimeUnit.MINUTES.toSeconds(10L);
     private static final int NATT_KEEPALIVE_DELAY_SECONDS = (int) TimeUnit.MINUTES.toSeconds(5L);
     private static final int[] RETRANS_TIMEOUT_MS_LIST = new int[] {500, 500, 500, 500, 500, 500};
+    private static final int[] LIVENESS_RETRANS_TIMEOUT_MS_LIST =
+            new int[] {500, 500, 500, 500, 500, 500};
 
     private static final int DSCP = 8;
 
@@ -547,5 +549,18 @@ public final class IkeSessionParamsTest extends IkeSessionTestBase {
 
         verifyIkeParamsMinimum(sessionParams);
         assertEquals(ESP_ENCAP_TYPE_UDP, sessionParams.getEncapType());
+    }
+
+    @Test
+    public void testSetLivenessRetransmissionTimeouts() throws Exception {
+        IkeSessionParams sessionParams =
+                createIkeParamsBuilderMinimum()
+                        .setLivenessRetransmissionTimeoutsMillis(LIVENESS_RETRANS_TIMEOUT_MS_LIST)
+                        .build();
+
+        verifyIkeParamsMinimum(sessionParams);
+        assertArrayEquals(
+                LIVENESS_RETRANS_TIMEOUT_MS_LIST,
+                sessionParams.getLivenessRetransmissionTimeoutsMillis());
     }
 }
