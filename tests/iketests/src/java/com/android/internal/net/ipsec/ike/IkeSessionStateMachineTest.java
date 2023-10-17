@@ -1045,7 +1045,9 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                 .addPcscfServerRequest(AF_INET)
                 .addPcscfServerRequest(AF_INET6)
                 .setRetransmissionTimeoutsMillis(
-                        new int[] {5000, 10000, 20000, 30000, 40000, 50000});
+                        new int[] {5000, 10000, 20000, 30000, 40000, 50000})
+                .setLivenessRetransmissionTimeoutsMillis(
+                        new int[] {1000, 1000, 1000, 1000, 5000, 5000, 10000});
     }
 
     private IkeSessionParams buildIkeSessionParams() throws Exception {
@@ -7396,5 +7398,96 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                     argThat(e -> e instanceof IkeInternalException
                             && e.getCause() instanceof IOException));
         }
+    }
+
+    private void verifyLivenessStatusCallback(
+            @IkeSessionCallback.LivenessStatus int expectedStatus) {
+        verify(mMockIkeSessionCallback).onLivenessStatusChanged(eq(expectedStatus));
+    }
+
+    private void executeAndVerifyRequestLivenessCheck() throws Exception {
+        setupIdleStateMachine();
+
+        mIkeSessionStateMachine.requestLivenessCheck();
+        mLooper.dispatchAll();
+
+        verifyEmptyInformationalSent(1, false /* expectedResp*/);
+        verifyLivenessStatusCallback(IkeSessionCallback.LIVENESS_STATUS_ON_DEMAND_STARTED);
+        resetMockIkeMessageHelper();
+    }
+
+    @Test
+    public void testDpdOnDemandIkeLocalInfoRcvDpdReq() throws Exception {
+        executeAndVerifyRequestLivenessCheck();
+        mIkeSessionStateMachine.sendMessage(
+                CMD_RECEIVE_IKE_PACKET, makeDpdIkeRequest(mSpyCurrentIkeSaRecord));
+        mLooper.dispatchAll();
+
+        verifyEmptyInformationalSent(1, true /* expectedResp*/);
+        verifyLivenessStatusCallback(IkeSessionCallback.LIVENESS_STATUS_SUCCESS);
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState()
+                        instanceof IkeSessionStateMachine.DpdOnDemandIkeLocalInfo);
+    }
+
+    @Test
+    public void testDpdOnDemandIkeLocalInfoLivenessRetransmissionTimeout() throws Exception {
+        executeAndVerifyRequestLivenessCheck();
+
+        int[] timeouts =
+                mIkeSessionStateMachine.mIkeSessionParams.getLivenessRetransmissionTimeoutsMillis();
+        for (long delay : timeouts) {
+            mLooper.dispatchAll();
+            mLooper.moveTimeForward(delay);
+        }
+        mLooper.dispatchAll();
+
+        verifyLivenessStatusCallback(IkeSessionCallback.LIVENESS_STATUS_FAILURE);
+        if (SdkLevel.isAtLeastT()) {
+            verify(mMockIkeSessionCallback)
+                    .onClosedWithException(
+                            argThat(
+                                    e ->
+                                            e instanceof IkeIOException
+                                                    && e.getCause()
+                                                            instanceof IkeTimeoutException));
+        } else {
+            verify(mMockIkeSessionCallback)
+                    .onClosedWithException(
+                            argThat(
+                                    e ->
+                                            e instanceof IkeInternalException
+                                                    && e.getCause() instanceof IOException));
+        }
+    }
+
+    @Test
+    public void testLivenessCheckWithIncomingPacketsInBusyState() throws Exception {
+        setupIdleStateMachine();
+
+        // Send Rekey-Create request
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_EXECUTE_LOCAL_REQ,
+                mLocalRequestFactory.getIkeLocalRequest(
+                        IkeSessionStateMachine.CMD_LOCAL_REQUEST_REKEY_IKE));
+        mLooper.dispatchAll();
+        verifyRetransmissionStarted();
+
+        // Request to check liveness during local rekey status
+        mIkeSessionStateMachine.requestLivenessCheck();
+        mLooper.dispatchAll();
+
+        verifyLivenessStatusCallback(IkeSessionCallback.LIVENESS_STATUS_BACKGROUND_STARTED);
+
+        // Prepare "rekeyed" SA
+        setupRekeyedIkeSa(mSpyLocalInitIkeSaRecord);
+
+        // Receive Rekey response
+        ReceivedIkePacket dummyRekeyIkeRespReceivedPacket = makeRekeyIkeResponse();
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, dummyRekeyIkeRespReceivedPacket);
+        mLooper.dispatchAll();
+
+        verifyLivenessStatusCallback(IkeSessionCallback.LIVENESS_STATUS_SUCCESS);
     }
 }
