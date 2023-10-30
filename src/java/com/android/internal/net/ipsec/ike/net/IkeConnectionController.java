@@ -52,6 +52,7 @@ import android.net.ipsec.ike.exceptions.IkeException;
 import android.os.Handler;
 import android.os.Message;
 import android.system.ErrnoException;
+import android.util.SparseArray;
 
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.net.ipsec.ike.IkeContext;
@@ -69,6 +70,7 @@ import com.android.internal.net.ipsec.ike.shim.ShimUtils;
 import com.android.internal.net.ipsec.ike.utils.IkeAlarm;
 
 import java.io.IOException;
+import java.io.PrintWriter;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.net.Inet4Address;
@@ -178,6 +180,17 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
     private Network mUnderpinnedNetwork;
 
     private IkeNattKeepalive mIkeNattKeepalive;
+
+    private static final SparseArray<String> NAT_STATUS_TO_STR;
+
+    static {
+        NAT_STATUS_TO_STR = new SparseArray<>();
+        NAT_STATUS_TO_STR.put(
+                NAT_TRAVERSAL_SUPPORT_NOT_CHECKED, "NAT_TRAVERSAL_SUPPORT_NOT_CHECKED");
+        NAT_STATUS_TO_STR.put(NAT_TRAVERSAL_UNSUPPORTED, "NAT_TRAVERSAL_UNSUPPORTED");
+        NAT_STATUS_TO_STR.put(NAT_NOT_DETECTED, "NAT_NOT_DETECTED");
+        NAT_STATUS_TO_STR.put(NAT_DETECTED, "NAT_DETECTED");
+    }
 
     /** Constructor of IkeConnectionController */
     @VisibleForTesting
@@ -1243,6 +1256,29 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
         mNetworkCallback.setAddress(mLocalAddress);
 
         mCallback.onUnderlyingNetworkUpdated();
+    }
+
+    /**
+     * Dumps the state of {@link IkeConnectionController}
+     *
+     * @param pw {@link PrintWriter} to write the state of the object.
+     */
+    public void dump(PrintWriter pw, String prefix) {
+        pw.println("------------------------------");
+        pw.println("IkeConnectionController:");
+        pw.println(prefix + "Network: " + mNetwork);
+        pw.println(prefix + "Nat status: " + NAT_STATUS_TO_STR.get(mNatStatus));
+        pw.println(prefix + "Local address: " + mLocalAddress);
+        pw.println(prefix + "Remote(Server) address: " + mRemoteAddress);
+        pw.println(prefix + "Mobility status: " + mMobilityEnabled);
+        pw.println(prefix + "Local port: " + getLocalPort());
+        pw.println(prefix + "Remote(server) port: " + getRemotePort());
+        pw.println(
+                prefix + "Esp ip version: " + IkeSessionParams.IP_VERSION_TO_STR.get(mIpVersion));
+        pw.println(
+                prefix + "Esp encap type: " + IkeSessionParams.ENCAP_TYPE_TO_STR.get(mEncapType));
+        pw.println("------------------------------");
+        pw.println();
     }
 
     @Override

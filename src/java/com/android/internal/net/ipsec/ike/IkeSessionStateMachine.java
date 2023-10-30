@@ -187,7 +187,9 @@ import com.android.internal.net.ipsec.ike.utils.Retransmitter;
 import com.android.internal.util.State;
 import com.android.modules.utils.build.SdkLevel;
 
+import java.io.FileDescriptor;
 import java.io.IOException;
+import java.io.PrintWriter;
 import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -5960,6 +5962,28 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
         payloadList.add(natdSrcIp);
         payloadList.add(natdDstIp);
+    }
+
+    /**
+     * Dumps the state of {@link IkeSessionStateMachine}
+     *
+     * @param pw {@link PrintWriter} to write the state of the object.
+     */
+    public void dump(PrintWriter pw) {
+        super.dump(new FileDescriptor(), pw, new String[0]);
+
+        // TODO(b/310058405): To use IndentingPrintWriter Utility Class for Indentation purpose
+        String prefix = "    ";
+
+        // dump ike session params data
+        if (mIkeSessionParams != null) {
+            mIkeSessionParams.dump(pw, prefix);
+        }
+
+        // dump ike connection controller data
+        if (mIkeConnectionCtrl != null) {
+            mIkeConnectionCtrl.dump(pw, prefix);
+        }
     }
 
     private static class IkeEapOutboundMsgWrapper {
