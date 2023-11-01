@@ -551,7 +551,14 @@ public final class IkeSessionParamsTest extends IkeSessionTestBase {
         assertEquals(ESP_ENCAP_TYPE_UDP, sessionParams.getEncapType());
     }
 
+    /**
+     * Test Liveness Retransmission Timeouts. Test coverage up to Android U is ignored because the
+     * Liveness APIs are not available in versions below, including SDK 34.
+     *
+     * @throws java.lang.NoSuchMethodError if sdk {@code VERSION_CODES.UPSIDE_DOWN_CAKE} or less
+     */
     @Test
+    @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     public void testSetLivenessRetransmissionTimeouts() throws Exception {
         IkeSessionParams sessionParams =
                 createIkeParamsBuilderMinimum()
