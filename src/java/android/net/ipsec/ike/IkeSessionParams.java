@@ -348,6 +348,14 @@ public final class IkeSessionParams {
     @SystemApi(client = SystemApi.Client.MODULE_LIBRARIES)
     public static final int NATT_KEEPALIVE_INTERVAL_AUTO = -1;
 
+    /**
+     * Setting timer to this value will disable the Dead Peer Detection(DPD).
+     *
+     * <p>@see {@link Builder#setDpdDelaySeconds}
+     */
+    @SuppressLint("UnflaggedApi")
+    public static final int IKE_DPD_DELAY_SEC_DISABLED = Integer.MAX_VALUE;
+
     /** @hide */
     @VisibleForTesting static final int IKE_HARD_LIFETIME_SEC_MINIMUM = 300; // 5 minutes
     /** @hide */
@@ -370,8 +378,6 @@ public final class IkeSessionParams {
     @VisibleForTesting static final int IKE_DPD_DELAY_SEC_MAX = 1800; // 30 minutes
     /** @hide */
     @VisibleForTesting static final int IKE_DPD_DELAY_SEC_DEFAULT = 120; // 2 minutes
-    /** @hide */
-    public static final int IKE_DPD_DELAY_SEC_DISABLED = Integer.MAX_VALUE;
 
     /** @hide */
     @VisibleForTesting public static final int IKE_NATT_KEEPALIVE_DELAY_SEC_MIN = 10;
@@ -764,7 +770,7 @@ public final class IkeSessionParams {
     /** Retrieves the Dead Peer Detection(DPD) delay in seconds */
     // Use "second" because smaller unit does not make sense to a DPD delay.
     @SuppressLint("MethodNameUnits")
-    @IntRange(from = IKE_DPD_DELAY_SEC_MIN, to = IKE_DPD_DELAY_SEC_MAX)
+    @IntRange(from = IKE_DPD_DELAY_SEC_MIN)
     public int getDpdDelaySeconds() {
         return mDpdDelaySec;
     }
@@ -1956,14 +1962,12 @@ public final class IkeSessionParams {
          * @param dpdDelaySeconds number of seconds after which IKE SA will initiate DPD if no
          *     inbound cryptographically protected IKE message was received. Defaults to 120
          *     seconds. MUST be a value greater than or equal to than 20 seconds. Setting the value
-         *     to {@link java.lang.Integer#MAX_VALUE} will disable DPD.
+         *     to {@link IkeSessionParams#IKE_DPD_DELAY_SEC_DISABLED} will disable DPD.
          * @return Builder this, to facilitate chaining.
          */
-        // TODO: b/240206579 Align the @IntRange with the implementation.
         @NonNull
         public Builder setDpdDelaySeconds(
-                @IntRange(from = IKE_DPD_DELAY_SEC_MIN, to = IKE_DPD_DELAY_SEC_MAX)
-                        int dpdDelaySeconds) {
+                @IntRange(from = IKE_DPD_DELAY_SEC_MIN) int dpdDelaySeconds) {
             if (dpdDelaySeconds < IKE_DPD_DELAY_SEC_MIN) {
                 throw new IllegalArgumentException("Invalid DPD delay value");
             }
