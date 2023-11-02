@@ -130,7 +130,7 @@ import com.android.internal.net.ipsec.test.ike.message.IkeTestUtils;
 import com.android.internal.net.ipsec.test.ike.message.IkeTsPayload;
 import com.android.internal.net.ipsec.test.ike.testutils.MockIpSecTestUtils;
 import com.android.internal.net.ipsec.test.ike.utils.IState;
-import com.android.internal.net.ipsec.test.ike.utils.IkeMetricsInterface;
+import com.android.internal.net.ipsec.test.ike.utils.IkeMetrics;
 import com.android.internal.net.ipsec.test.ike.utils.IpSecSpiGenerator;
 import com.android.internal.net.ipsec.test.ike.utils.RandomnessFactory;
 import com.android.internal.net.utils.test.Log;
@@ -689,10 +689,7 @@ public final class ChildSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     private void verifyChildMetricsLogged(int stateCode, int exceptionCode) {
-        verifyMetricsLogged(
-                IkeMetricsInterface.IKE_SESSION_TERMINATED__SESSION_TYPE__SESSION_CHILD,
-                stateCode,
-                exceptionCode);
+        verifyMetricsLogged(IkeMetrics.IKE_SESSION_TYPE_CHILD, stateCode, exceptionCode);
     }
 
     private <T extends IkeException> void verifyHandleFatalErrorAndQuit(
@@ -731,8 +728,7 @@ public final class ChildSessionStateMachineTest extends IkeSessionTestBase {
         verifyHandleFatalErrorAndQuit(
                 mChildSessionStateMachine.mCreateChildLocalCreate,
                 NoValidProposalChosenException.class,
-                IkeMetricsInterface
-                        .IKE_SESSION_TERMINATED__IKE_ERROR__ERROR_PROTOCOL_NO_PROPOSAL_CHOSEN);
+                IkeMetrics.IKE_ERROR_PROTOCOL_NO_PROPOSAL_CHOSEN);
     }
 
     @Test
@@ -781,8 +777,7 @@ public final class ChildSessionStateMachineTest extends IkeSessionTestBase {
         verifyHandleFatalErrorAndQuit(
                 mChildSessionStateMachine.mCreateChildLocalCreate,
                 InvalidSyntaxException.class,
-                IkeMetricsInterface
-                        .IKE_SESSION_TERMINATED__IKE_ERROR__ERROR_PROTOCOL_INVALID_SYNTAX);
+                IkeMetrics.IKE_ERROR_PROTOCOL_INVALID_SYNTAX);
     }
 
     @Test
@@ -809,7 +804,7 @@ public final class ChildSessionStateMachineTest extends IkeSessionTestBase {
         verifyHandleFatalErrorAndQuit(
                 mChildSessionStateMachine.mCreateChildLocalCreate,
                 IkeInternalException.class,
-                IkeMetricsInterface.IKE_SESSION_TERMINATED__IKE_ERROR__ERROR_INTERNAL);
+                IkeMetrics.IKE_ERROR_INTERNAL);
     }
 
     private void setupIdleStateMachine() throws Exception {
@@ -880,11 +875,7 @@ public final class ChildSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     private void verifyNotifyUsersDeleteSession(Executor spyExecutor, IState state) {
-        verifyNotifyUsersDeleteSession(
-                spyExecutor,
-                state,
-                null,
-                IkeMetricsInterface.IKE_SESSION_TERMINATED__IKE_ERROR__ERROR_NONE);
+        verifyNotifyUsersDeleteSession(spyExecutor, state, null, IkeMetrics.IKE_ERROR_NONE);
     }
 
     private void verifyNotifyUsersDeleteSession(
@@ -1366,9 +1357,7 @@ public final class ChildSessionStateMachineTest extends IkeSessionTestBase {
         verify(mMockChildSessionSmCallback, never()).scheduleRetryLocalRequest(any());
 
         verifyMetricsLogged(
-                IkeMetricsInterface.IKE_SESSION_TERMINATED__SESSION_TYPE__SESSION_CHILD,
-                getStateCode(expectedState),
-                expectedErrorCode);
+                IkeMetrics.IKE_SESSION_TYPE_CHILD, getStateCode(expectedState), expectedErrorCode);
     }
 
     @Test
@@ -1389,8 +1378,7 @@ public final class ChildSessionStateMachineTest extends IkeSessionTestBase {
         verifyIkeSessionFatalErrorAndSendOutboundIkeDeletePayload(
                 NoAdditionalSasException.class,
                 mChildSessionStateMachine.mMobikeRekeyChildLocalCreate,
-                IkeMetricsInterface
-                        .IKE_SESSION_TERMINATED__IKE_ERROR__ERROR_PROTOCOL_NO_ADDITIONAL_SAS);
+                IkeMetrics.IKE_ERROR_PROTOCOL_NO_ADDITIONAL_SAS);
     }
 
     @Test
@@ -1419,8 +1407,7 @@ public final class ChildSessionStateMachineTest extends IkeSessionTestBase {
         verifyIkeSessionFatalErrorAndSendOutboundIkeDeletePayload(
                 IkeException.class,
                 mChildSessionStateMachine.mMobikeRekeyChildLocalCreate,
-                IkeMetricsInterface
-                        .IKE_SESSION_TERMINATED__IKE_ERROR__ERROR_PROTOCOL_INVALID_SYNTAX);
+                IkeMetrics.IKE_ERROR_PROTOCOL_INVALID_SYNTAX);
     }
 
     @Test
@@ -1501,8 +1488,7 @@ public final class ChildSessionStateMachineTest extends IkeSessionTestBase {
                 mSpyUserCbExecutor,
                 mChildSessionStateMachine.mRekeyChildLocalCreate,
                 InvalidSyntaxException.class,
-                IkeMetricsInterface
-                        .IKE_SESSION_TERMINATED__IKE_ERROR__ERROR_PROTOCOL_INVALID_SYNTAX);
+                IkeMetrics.IKE_ERROR_PROTOCOL_INVALID_SYNTAX);
 
         // Verify no SPI for provisional Child was registered.
         verify(mMockChildSessionSmCallback, never())
@@ -1547,7 +1533,7 @@ public final class ChildSessionStateMachineTest extends IkeSessionTestBase {
                 mSpyUserCbExecutor,
                 mChildSessionStateMachine.mRekeyChildLocalCreate,
                 IkeInternalException.class,
-                IkeMetricsInterface.IKE_SESSION_TERMINATED__IKE_ERROR__ERROR_INTERNAL);
+                IkeMetrics.IKE_ERROR_INTERNAL);
 
         // Verify SPI for provisional Child was registered and unregistered.
         verify(mMockChildSessionSmCallback)
@@ -2156,7 +2142,7 @@ public final class ChildSessionStateMachineTest extends IkeSessionTestBase {
         verifyHandleFatalErrorAndQuit(
                 mChildSessionStateMachine.mCreateChildLocalCreate,
                 IkeInternalException.class,
-                IkeMetricsInterface.IKE_SESSION_TERMINATED__IKE_ERROR__ERROR_INTERNAL);
+                IkeMetrics.IKE_ERROR_INTERNAL);
         verify(spyIkeLog).wtf(anyString(), anyString(), any(RuntimeException.class));
     }
 
