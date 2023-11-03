@@ -106,6 +106,7 @@ public class IkeMetrics {
                 IKE_STATE_IKE_DELETE_LOCAL_DELETE,
                 IKE_STATE_IKE_DPD_LOCAL_INFO,
                 IKE_STATE_IKE_MOBIKE_LOCAL_INFO,
+                IKE_STATE_IKE_DPD_ON_DEMAND_LOCAL_INFO,
                 IKE_STATE_CHILD_KILL,
                 IKE_STATE_CHILD_INITIAL,
                 IKE_STATE_CHILD_CREATE_LOCAL_CREATE,
@@ -189,6 +190,10 @@ public class IkeMetrics {
     /** @hide */
     public static final int IKE_STATE_IKE_MOBIKE_LOCAL_INFO =
             IkeMetricsInterface.IKE_SESSION_TERMINATED__IKE_STATE__STATE_IKE_MOBIKE_LOCAL_INFO;
+    /** @hide */
+    public static final int IKE_STATE_IKE_DPD_ON_DEMAND_LOCAL_INFO =
+            IkeMetricsInterface
+                    .IKE_SESSION_TERMINATED__IKE_STATE__STATE_IKE_DPD_ON_DEMAND_LOCAL_INFO;
     /** @hide */
     public static final int IKE_STATE_CHILD_KILL =
             IkeMetricsInterface.IKE_SESSION_TERMINATED__IKE_STATE__STATE_CHILD_KILL;
@@ -350,7 +355,10 @@ public class IkeMetrics {
     public static final int IKE_ERROR_PROTOCOL_CHILD_SA_NOT_FOUND =
             IkeMetricsInterface
                     .IKE_SESSION_TERMINATED__IKE_ERROR__ERROR_PROTOCOL_CHILD_SA_NOT_FOUND;
-
+    /** @hide */
+    public static final int IKE_TASK_UNSPECIFIED =
+            IkeMetricsInterface
+                    .IKE_LIVENESS_CHECK_SESSION_VALIDATED__IKE_TASK__IKE_TASK_UNSPECIFIED;
     /**
      * Values for UnderlyingNetworkType from IkeUnderlyingNetworkType enum proto
      *
@@ -414,10 +422,11 @@ public class IkeMetrics {
         IkeMetricsInterface.write(
                 IkeMetricsInterface.IKE_LIVENESS_CHECK_SESSION_VALIDATED,
                 ikeCaller,
-                ikeState,
+                IKE_TASK_UNSPECIFIED,
                 ikeUnderlyingNetworkType,
                 elapsedTimeInMillis,
                 numberOfOnGoing,
-                resultSuccess);
+                resultSuccess,
+                ikeState);
     }
 }
