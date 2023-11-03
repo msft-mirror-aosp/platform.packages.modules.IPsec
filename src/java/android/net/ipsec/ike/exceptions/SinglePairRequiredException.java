@@ -18,7 +18,7 @@ package android.net.ipsec.ike.exceptions;
 import android.net.ipsec.ike.ChildSessionCallback;
 import android.net.ipsec.ike.IkeSessionCallback;
 
-import com.android.internal.net.ipsec.ike.utils.IkeMetricsInterface;
+import com.android.internal.net.ipsec.ike.utils.IkeMetrics;
 
 /**
  * This exception is thrown if the remote server requires a single pair of addresses as selectors.
@@ -67,7 +67,6 @@ public class SinglePairRequiredException extends IkeProtocolException {
      */
     @Override
     public int getMetricsErrorCode() {
-        return IkeMetricsInterface
-                .IKE_SESSION_TERMINATED__IKE_ERROR__ERROR_PROTOCOL_SINGLE_PAIR_REQUIRED;
+        return IkeMetrics.IKE_ERROR_PROTOCOL_SINGLE_PAIR_REQUIRED;
     }
 }

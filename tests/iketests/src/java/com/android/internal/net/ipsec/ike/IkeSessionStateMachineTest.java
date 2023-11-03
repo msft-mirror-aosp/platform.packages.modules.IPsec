@@ -213,7 +213,7 @@ import com.android.internal.net.ipsec.test.ike.testmode.DeterministicSecureRando
 import com.android.internal.net.ipsec.test.ike.testutils.CertUtils;
 import com.android.internal.net.ipsec.test.ike.utils.IState;
 import com.android.internal.net.ipsec.test.ike.utils.IkeAlarm.IkeAlarmConfig;
-import com.android.internal.net.ipsec.test.ike.utils.IkeMetricsInterface;
+import com.android.internal.net.ipsec.test.ike.utils.IkeMetrics;
 import com.android.internal.net.ipsec.test.ike.utils.IkeSecurityParameterIndex;
 import com.android.internal.net.ipsec.test.ike.utils.IkeSpiGenerator;
 import com.android.internal.net.ipsec.test.ike.utils.RandomnessFactory;
@@ -1594,10 +1594,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     private void verifyIkeMetricsLogged(int stateCode, int exceptionCode) {
-        verifyMetricsLogged(
-                IkeMetricsInterface.IKE_SESSION_TERMINATED__SESSION_TYPE__SESSION_IKE,
-                stateCode,
-                exceptionCode);
+        verifyMetricsLogged(IkeMetrics.IKE_SESSION_TYPE_IKE, stateCode, exceptionCode);
     }
 
     private void verifyFireCallbackOnDnsFailure(IkeSessionCallback callback, IState expectedState) {
@@ -1606,15 +1603,12 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                     argThat(e -> e instanceof IkeIOException
                             && e.getCause() instanceof UnknownHostException));
             verifyIkeMetricsLogged(
-                    getStateCode(expectedState),
-                    IkeMetricsInterface.IKE_SESSION_TERMINATED__IKE_ERROR__ERROR_IO_DNS_FAILURE);
+                    getStateCode(expectedState), IkeMetrics.IKE_ERROR_IO_DNS_FAILURE);
         } else {
             verify(callback).onClosedWithException(
                     argThat(e -> e instanceof IkeInternalException
                             && e.getCause() instanceof IOException));
-            verifyIkeMetricsLogged(
-                    getStateCode(expectedState),
-                    IkeMetricsInterface.IKE_SESSION_TERMINATED__IKE_ERROR__ERROR_INTERNAL);
+            verifyIkeMetricsLogged(getStateCode(expectedState), IkeMetrics.IKE_ERROR_INTERNAL);
         }
     }
 
@@ -2760,9 +2754,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     private void verifyNotifyUserCloseSession(IState state) {
         verify(mSpyUserCbExecutor).execute(any(Runnable.class));
         verify(mMockIkeSessionCallback).onClosed();
-        verifyIkeMetricsLogged(
-                getStateCode(state),
-                IkeMetricsInterface.IKE_SESSION_TERMINATED__IKE_ERROR__ERROR_NONE);
+        verifyIkeMetricsLogged(getStateCode(state), IkeMetrics.IKE_ERROR_NONE);
     }
 
     private void verifyNotifyUserCloseSessionWithException(
@@ -3388,9 +3380,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                 .onClosedWithException(any(AuthenticationFailedException.class));
 
         verifyIkeMetricsLogged(
-                getStateCode(state),
-                IkeMetricsInterface
-                        .IKE_SESSION_TERMINATED__IKE_ERROR__ERROR_PROTOCOL_AUTHENTICATION_FAILED);
+                getStateCode(state), IkeMetrics.IKE_ERROR_PROTOCOL_AUTHENTICATION_FAILED);
     }
 
     @Test
@@ -6156,9 +6146,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         // This exception is mapped to metrics error code:
         int expectedError = expectedNotifyErrorCause;
         if (expectedError == ERROR_TYPE_AUTHENTICATION_FAILED) {
-            expectedError =
-                    IkeMetricsInterface
-                            .IKE_SESSION_TERMINATED__IKE_ERROR__ERROR_PROTOCOL_AUTHENTICATION_FAILED;
+            expectedError = IkeMetrics.IKE_ERROR_PROTOCOL_AUTHENTICATION_FAILED;
         }
 
         verify(mMockIkeSessionCallback).onClosedWithException(any(exceptionType));
