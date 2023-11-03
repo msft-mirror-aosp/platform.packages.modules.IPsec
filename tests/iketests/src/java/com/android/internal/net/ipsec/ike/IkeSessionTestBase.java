@@ -57,7 +57,6 @@ import com.android.internal.net.ipsec.test.ike.testutils.MockIpSecTestUtils;
 import com.android.internal.net.ipsec.test.ike.utils.IState;
 import com.android.internal.net.ipsec.test.ike.utils.IkeAlarmReceiver;
 import com.android.internal.net.ipsec.test.ike.utils.IkeMetrics;
-import com.android.internal.net.ipsec.test.ike.utils.IkeMetricsInterface;
 import com.android.internal.net.ipsec.test.ike.utils.RandomnessFactory;
 
 import org.junit.Before;
@@ -250,15 +249,12 @@ public abstract class IkeSessionTestBase {
     protected void verifyMetricsLogged(int sessionType, int stateCode, int exceptionCode) {
         verify(mIkeMetrics)
                 .logSessionTerminated(
-                        IkeMetricsInterface.IKE_SESSION_TERMINATED__IKE_CALLER__CALLER_UNKNOWN,
-                        sessionType,
-                        stateCode,
-                        exceptionCode);
+                        IkeMetrics.IKE_CALLER_UNKNOWN, sessionType, stateCode, exceptionCode);
     }
 
     protected int getStateCode(IState state) {
         return state instanceof AbstractSessionStateMachine.ExceptionHandlerBase
                 ? ((AbstractSessionStateMachine.ExceptionHandlerBase) state).getMetricsStateCode()
-                : IkeMetricsInterface.IKE_SESSION_TERMINATED__IKE_STATE__STATE_UNKNOWN;
+                : IkeMetrics.IKE_STATE_UNKNOWN;
     }
 }

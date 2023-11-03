@@ -28,6 +28,7 @@ import android.os.Message;
 import android.os.test.TestLooper;
 
 import com.android.internal.net.ipsec.test.ike.AbstractSessionStateMachine.ExceptionHandlerBase;
+import com.android.internal.net.ipsec.test.ike.utils.IkeMetrics;
 import com.android.internal.net.ipsec.test.ike.utils.State;
 
 import org.junit.After;
@@ -104,13 +105,13 @@ public final class AbstractSessionStateMachineTest extends IkeSessionTestBase {
             }
 
             @Override
-            protected int getMetricsStateCode() {
+            protected @IkeMetrics.IkeState int getMetricsStateCode() {
                 return 0;
             }
         }
 
         @Override
-        protected int getMetricsSessionType() {
+        protected @IkeMetrics.IkeSessionType int getMetricsSessionType() {
             return 0;
         }
     }
