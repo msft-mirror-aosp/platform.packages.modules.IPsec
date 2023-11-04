@@ -177,7 +177,7 @@ import com.android.internal.net.ipsec.ike.shim.IIkeSessionStateMachineShim;
 import com.android.internal.net.ipsec.ike.shim.ShimUtils;
 import com.android.internal.net.ipsec.ike.utils.IkeAlarm;
 import com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver;
-import com.android.internal.net.ipsec.ike.utils.IkeMetricsInterface;
+import com.android.internal.net.ipsec.ike.utils.IkeMetrics;
 import com.android.internal.net.ipsec.ike.utils.IkeSecurityParameterIndex;
 import com.android.internal.net.ipsec.ike.utils.IkeSpiGenerator;
 import com.android.internal.net.ipsec.ike.utils.IpSecSpiGenerator;
@@ -1298,8 +1298,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         }
 
         @Override
-        protected int getMetricsStateCode() {
-            return IkeMetricsInterface.IKE_SESSION_TERMINATED__IKE_STATE__STATE_IKE_KILL;
+        protected @IkeMetrics.IkeState int getMetricsStateCode() {
+            return IkeMetrics.IKE_STATE_IKE_KILL;
         }
     }
 
@@ -1394,8 +1394,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         }
 
         @Override
-        protected int getMetricsStateCode() {
-            return IkeMetricsInterface.IKE_SESSION_TERMINATED__IKE_STATE__STATE_IKE_INITIAL;
+        protected @IkeMetrics.IkeState int getMetricsStateCode() {
+            return IkeMetrics.IKE_STATE_IKE_INITIAL;
         }
     }
 
@@ -1616,8 +1616,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         }
 
         @Override
-        protected int getMetricsStateCode() {
-            return IkeMetricsInterface.IKE_SESSION_TERMINATED__IKE_STATE__STATE_IKE_IDLE;
+        protected @IkeMetrics.IkeState int getMetricsStateCode() {
+            return IkeMetrics.IKE_STATE_IKE_IDLE;
         }
     }
 
@@ -2594,8 +2594,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         }
 
         @Override
-        protected int getMetricsStateCode() {
-            return IkeMetricsInterface.IKE_SESSION_TERMINATED__IKE_STATE__STATE_IKE_RECEIVING;
+        protected @IkeMetrics.IkeState int getMetricsStateCode() {
+            return IkeMetrics.IKE_STATE_IKE_RECEIVING;
         }
     }
 
@@ -3127,9 +3127,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         }
 
         @Override
-        protected int getMetricsStateCode() {
-            return IkeMetricsInterface
-                    .IKE_SESSION_TERMINATED__IKE_STATE__STATE_IKE_CHILD_PROCEDURE_ONGOING;
+        protected @IkeMetrics.IkeState int getMetricsStateCode() {
+            return IkeMetrics.IKE_STATE_IKE_CHILD_PROCEDURE_ONGOING;
         }
     }
 
@@ -3642,9 +3641,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         }
 
         @Override
-        protected int getMetricsStateCode() {
-            return IkeMetricsInterface
-                    .IKE_SESSION_TERMINATED__IKE_STATE__STATE_IKE_CREATE_LOCAL_IKE_INIT;
+        protected @IkeMetrics.IkeState int getMetricsStateCode() {
+            return IkeMetrics.IKE_STATE_IKE_CREATE_LOCAL_IKE_INIT;
         }
     }
 
@@ -4392,9 +4390,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         }
 
         @Override
-        protected int getMetricsStateCode() {
-            return IkeMetricsInterface
-                    .IKE_SESSION_TERMINATED__IKE_STATE__STATE_IKE_CREATE_LOCAL_IKE_AUTH;
+        protected @IkeMetrics.IkeState int getMetricsStateCode() {
+            return IkeMetrics.IKE_STATE_IKE_CREATE_LOCAL_IKE_AUTH;
         }
     }
 
@@ -4571,9 +4568,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         }
 
         @Override
-        protected int getMetricsStateCode() {
-            return IkeMetricsInterface
-                    .IKE_SESSION_TERMINATED__IKE_STATE__STATE_IKE_CREATE_LOCAL_IKE_AUTH_IN_EAP;
+        protected @IkeMetrics.IkeState int getMetricsStateCode() {
+            return IkeMetrics.IKE_STATE_IKE_CREATE_LOCAL_IKE_AUTH_IN_EAP;
         }
     }
 
@@ -4714,9 +4710,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         }
 
         @Override
-        protected int getMetricsStateCode() {
-            return IkeMetricsInterface
-                    .IKE_SESSION_TERMINATED__IKE_STATE__STATE_IKE_CREATE_LOCAL_IKE_AUTH_POST_EAP;
+        protected @IkeMetrics.IkeState int getMetricsStateCode() {
+            return IkeMetrics.IKE_STATE_IKE_CREATE_LOCAL_IKE_AUTH_POST_EAP;
         }
     }
 
@@ -5068,9 +5063,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         }
 
         @Override
-        protected int getMetricsStateCode() {
-            return IkeMetricsInterface
-                    .IKE_SESSION_TERMINATED__IKE_STATE__STATE_IKE_REKEY_LOCAL_CREATE;
+        protected @IkeMetrics.IkeState int getMetricsStateCode() {
+            return IkeMetrics.IKE_STATE_IKE_REKEY_LOCAL_CREATE;
         }
     }
 
@@ -5152,9 +5146,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         }
 
         @Override
-        protected int getMetricsStateCode() {
-            return IkeMetricsInterface
-                    .IKE_SESSION_TERMINATED__IKE_STATE__STATE_IKE_SIMULTANEOUS_REKEY_LOCAL_CREATE;
+        protected @IkeMetrics.IkeState int getMetricsStateCode() {
+            return IkeMetrics.IKE_STATE_IKE_SIMULTANEOUS_REKEY_LOCAL_CREATE;
         }
     }
 
@@ -5354,9 +5347,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         }
 
         @Override
-        protected int getMetricsStateCode() {
-            return IkeMetricsInterface
-                    .IKE_SESSION_TERMINATED__IKE_STATE__STATE_IKE_SIMULTANEOUS_REKEY_LOCAL_DELETE_REMOTE_DELETE;
+        protected @IkeMetrics.IkeState int getMetricsStateCode() {
+            return IkeMetrics.IKE_STATE_IKE_SIMULTANEOUS_REKEY_LOCAL_DELETE_REMOTE_DELETE;
         }
     }
 
@@ -5425,9 +5417,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         }
 
         @Override
-        protected int getMetricsStateCode() {
-            return IkeMetricsInterface
-                    .IKE_SESSION_TERMINATED__IKE_STATE__STATE_IKE_SIMULTANEOUS_REKEY_LOCAL_DELETE;
+        protected @IkeMetrics.IkeState int getMetricsStateCode() {
+            return IkeMetrics.IKE_STATE_IKE_SIMULTANEOUS_REKEY_LOCAL_DELETE;
         }
     }
 
@@ -5468,9 +5459,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         }
 
         @Override
-        protected int getMetricsStateCode() {
-            return IkeMetricsInterface
-                    .IKE_SESSION_TERMINATED__IKE_STATE__STATE_IKE_SIMULTANEOUS_REKEY_REMOTE_DELETE;
+        protected @IkeMetrics.IkeState int getMetricsStateCode() {
+            return IkeMetrics.IKE_STATE_IKE_SIMULTANEOUS_REKEY_REMOTE_DELETE;
         }
     }
 
@@ -5506,9 +5496,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         }
 
         @Override
-        protected int getMetricsStateCode() {
-            return IkeMetricsInterface
-                    .IKE_SESSION_TERMINATED__IKE_STATE__STATE_IKE_REKEY_LOCAL_DELETE;
+        protected @IkeMetrics.IkeState int getMetricsStateCode() {
+            return IkeMetrics.IKE_STATE_IKE_REKEY_LOCAL_DELETE;
         }
     }
 
@@ -5549,9 +5538,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         }
 
         @Override
-        protected int getMetricsStateCode() {
-            return IkeMetricsInterface
-                    .IKE_SESSION_TERMINATED__IKE_STATE__STATE_IKE_REKEY_REMOTE_DELETE;
+        protected @IkeMetrics.IkeState int getMetricsStateCode() {
+            return IkeMetrics.IKE_STATE_IKE_REKEY_REMOTE_DELETE;
         }
     }
 
@@ -5618,9 +5606,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         }
 
         @Override
-        protected int getMetricsStateCode() {
-            return IkeMetricsInterface
-                    .IKE_SESSION_TERMINATED__IKE_STATE__STATE_IKE_DELETE_LOCAL_DELETE;
+        protected @IkeMetrics.IkeState int getMetricsStateCode() {
+            return IkeMetrics.IKE_STATE_IKE_DELETE_LOCAL_DELETE;
         }
     }
 
@@ -5703,8 +5690,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         }
 
         @Override
-        protected int getMetricsStateCode() {
-            return IkeMetricsInterface.IKE_SESSION_TERMINATED__IKE_STATE__STATE_IKE_DPD_LOCAL_INFO;
+        protected @IkeMetrics.IkeState int getMetricsStateCode() {
+            return IkeMetrics.IKE_STATE_IKE_DPD_LOCAL_INFO;
         }
     }
 
@@ -5931,9 +5918,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         }
 
         @Override
-        protected int getMetricsStateCode() {
-            return IkeMetricsInterface
-                    .IKE_SESSION_TERMINATED__IKE_STATE__STATE_IKE_MOBIKE_LOCAL_INFO;
+        protected @IkeMetrics.IkeState int getMetricsStateCode() {
+            return IkeMetrics.IKE_STATE_IKE_MOBIKE_LOCAL_INFO;
         }
     }
 
@@ -6150,7 +6136,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
     }
 
     @Override
-    protected int getMetricsSessionType() {
-        return IkeMetricsInterface.IKE_SESSION_TERMINATED__SESSION_TYPE__SESSION_IKE;
+    protected @IkeMetrics.IkeSessionType int getMetricsSessionType() {
+        return IkeMetrics.IKE_SESSION_TYPE_IKE;
     }
 }
