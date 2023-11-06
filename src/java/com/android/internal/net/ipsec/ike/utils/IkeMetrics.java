@@ -397,4 +397,27 @@ public class IkeMetrics {
                 ikeState,
                 ikeError);
     }
+
+    /**
+     * Log an atom when an liveness check is completed.
+     *
+     * <p>This method requests a liveness check from the client and records the associated
+     * information when the liveness check is completed regardless of success of failure.
+     */
+    public void logLivenessCheckCompleted(
+            @IkeCaller int ikeCaller,
+            @IkeState int ikeState,
+            @IkeUnderlyingNetworkType int ikeUnderlyingNetworkType,
+            int elapsedTimeInMillis,
+            int numberOfOnGoing,
+            boolean resultSuccess) {
+        IkeMetricsInterface.write(
+                IkeMetricsInterface.IKE_LIVENESS_CHECK_SESSION_VALIDATED,
+                ikeCaller,
+                ikeState,
+                ikeUnderlyingNetworkType,
+                elapsedTimeInMillis,
+                numberOfOnGoing,
+                resultSuccess);
+    }
 }

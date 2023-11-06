@@ -74,10 +74,16 @@ public class LivenessAssister {
 
     private int mLivenessCheckRequested;
 
-    public LivenessAssister(@NonNull IkeSessionCallback callback, @NonNull Executor executor) {
+    private LivenessMetricHelper mLivenessMetricHelper;
+
+    public LivenessAssister(
+            @NonNull IkeSessionCallback callback,
+            @NonNull Executor executor,
+            @NonNull IIkeMetricsCallback metricsCallback) {
         mCallback = callback;
         mUserCbExecutor = executor;
         mLivenessCheckRequested = REQ_TYPE_INITIAL;
+        mLivenessMetricHelper = new LivenessMetricHelper(metricsCallback);
     }
 
     /**
@@ -163,8 +169,72 @@ public class LivenessAssister {
     private void invokeUserCallback(@IkeSessionCallback.LivenessStatus int status) {
         try {
             mUserCbExecutor.execute(() -> mCallback.onLivenessStatusChanged(status));
+            mLivenessMetricHelper.recordLivenessStatus(status);
         } catch (Exception e) {
             getIkeLog().e(TAG, "onLivenessStatusChanged execution failed", e);
+        }
+    }
+
+    /** Interface for receiving values that make up atoms */
+    public interface IIkeMetricsCallback {
+        /** Notifies that the liveness check has been completed. */
+        void onLivenessCheckCompleted(
+                int elapsedTimeInMillis, int numberOfOnGoing, boolean resultSuccess);
+    }
+
+    private static class LivenessMetricHelper {
+
+        /** To log metric information, call the function when ready to send it. */
+        private final IIkeMetricsCallback mMetricsCallback;
+
+        private long mTimeInMillisStartedStatus;
+        private int mNumberOfOnGoing;
+
+        LivenessMetricHelper(IIkeMetricsCallback metricsCallback) {
+            clearVariables();
+            mMetricsCallback = metricsCallback;
+        }
+
+        private void clearVariables() {
+            mTimeInMillisStartedStatus = 0L;
+            mNumberOfOnGoing = 0;
+        }
+
+        public void recordLivenessStatus(@IkeSessionCallback.LivenessStatus int status) {
+            switch (status) {
+                case IkeSessionCallback.LIVENESS_STATUS_ON_DEMAND_STARTED: // fallthrough
+                case IkeSessionCallback.LIVENESS_STATUS_BACKGROUND_STARTED:
+                    clearVariables();
+                    mTimeInMillisStartedStatus = System.currentTimeMillis();
+                    break;
+                case IkeSessionCallback.LIVENESS_STATUS_ON_DEMAND_ONGOING: // fallthrough
+                case IkeSessionCallback.LIVENESS_STATUS_BACKGROUND_ONGOING:
+                    mNumberOfOnGoing++;
+                    break;
+                case IkeSessionCallback.LIVENESS_STATUS_SUCCESS:
+                    onLivenessCheckCompleted(true);
+                    break;
+                case IkeSessionCallback.LIVENESS_STATUS_FAILURE:
+                    onLivenessCheckCompleted(false);
+                    break;
+            }
+        }
+
+        private void onLivenessCheckCompleted(boolean resultSuccess) {
+            long elapsedTimeInMillis = System.currentTimeMillis() - mTimeInMillisStartedStatus;
+            if (elapsedTimeInMillis < 0L || elapsedTimeInMillis > Integer.MAX_VALUE) {
+                getIkeLog()
+                        .e(
+                                TAG,
+                                "onLivenessCheckCompleted, time exceeded failed. timeInMillies:"
+                                        + elapsedTimeInMillis);
+                clearVariables();
+                return;
+            }
+
+            mMetricsCallback.onLivenessCheckCompleted(
+                    (int) elapsedTimeInMillis, mNumberOfOnGoing, resultSuccess);
+            clearVariables();
         }
     }
 }
