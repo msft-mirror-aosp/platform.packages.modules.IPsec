@@ -67,6 +67,7 @@ import com.android.internal.net.ipsec.ike.keepalive.IkeNattKeepalive.KeepaliveCo
 import com.android.internal.net.ipsec.ike.message.IkeHeader;
 import com.android.internal.net.ipsec.ike.shim.ShimUtils;
 import com.android.internal.net.ipsec.ike.utils.IkeAlarm;
+import com.android.internal.net.ipsec.ike.utils.IkeMetrics;
 
 import java.io.IOException;
 import java.lang.annotation.Retention;
@@ -706,6 +707,18 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
     /** Gets the underlying network */
     public Network getNetwork() {
         return mNetwork;
+    }
+
+    /** Gets the underlying network type for Metrics */
+    public @IkeMetrics.IkeUnderlyingNetworkType int getMetricsNetworkType() {
+        if (mNc.hasTransport(TRANSPORT_WIFI)) {
+            return IkeMetrics.IKE_UNDERLYING_NETWORK_TYPE_WIFI;
+        } else if (mNc.hasTransport(TRANSPORT_CELLULAR)) {
+            return IkeMetrics.IKE_UNDERLYING_NETWORK_TYPE_CELLULAR;
+        }
+
+        // for other types.
+        return IkeMetrics.IKE_UNDERLYING_NETWORK_TYPE_UNSPECIFIED;
     }
 
     /** Gets the underpinned network */

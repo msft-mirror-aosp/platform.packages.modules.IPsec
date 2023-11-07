@@ -23,6 +23,7 @@ import android.os.Message;
 import android.util.SparseArray;
 
 import com.android.internal.annotations.VisibleForTesting;
+import com.android.internal.net.ipsec.ike.net.IkeConnectionController;
 import com.android.internal.net.ipsec.ike.utils.IkeMetrics;
 import com.android.internal.util.IState;
 import com.android.internal.util.State;
@@ -249,6 +250,29 @@ abstract class AbstractSessionStateMachine extends StateMachine {
                         getMetricsSessionType(),
                         stateCode,
                         exceptionCode);
+    }
+
+    protected void recordMetricsEvent_LivenssCheckCompletion(
+            IkeConnectionController connectionController,
+            int elapsedTimeInMillis,
+            int numberOfOnGoing,
+            boolean resultSuccess) {
+        final IState currentState = getCurrentState();
+        final @IkeMetrics.IkeState int stateCode =
+                currentState instanceof ExceptionHandlerBase
+                        ? ((ExceptionHandlerBase) currentState).getMetricsStateCode()
+                        : IkeMetrics.IKE_STATE_UNKNOWN;
+        final @IkeMetrics.IkeUnderlyingNetworkType int underlyingNetworkType =
+                connectionController.getMetricsNetworkType();
+
+        getIkeMetrics()
+                .logLivenessCheckCompleted(
+                        mIkeContext.getIkeCaller(),
+                        stateCode,
+                        underlyingNetworkType,
+                        elapsedTimeInMillis,
+                        numberOfOnGoing,
+                        resultSuccess);
     }
 
     protected abstract @IkeMetrics.IkeSessionType int getMetricsSessionType();

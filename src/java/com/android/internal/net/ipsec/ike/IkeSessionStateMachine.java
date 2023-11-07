@@ -229,7 +229,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class IkeSessionStateMachine extends AbstractSessionStateMachine
         implements IkeConnectionController.Callback,
                 IkeSocket.Callback,
-                IIkeSessionStateMachineShim {
+                IIkeSessionStateMachineShim,
+                LivenessAssister.IIkeMetricsCallback {
     // Package private
     static final String TAG = "IkeSessionStateMachine";
 
@@ -560,7 +561,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 new Ike3gppExtensionExchange(
                         mIkeSessionParams.getIke3gppExtension(), mUserCbExecutor);
 
-        mLivenessAssister = new LivenessAssister(mIkeSessionCallback, mUserCbExecutor);
+        mLivenessAssister = new LivenessAssister(mIkeSessionCallback, mUserCbExecutor, this);
 
         // CHECKSTYLE:OFF IndentationCheck
         addState(mKillIkeSessionParent);
@@ -6138,5 +6139,12 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
     @Override
     protected @IkeMetrics.IkeSessionType int getMetricsSessionType() {
         return IkeMetrics.IKE_SESSION_TYPE_IKE;
+    }
+
+    @Override
+    public void onLivenessCheckCompleted(
+            int elapsedTimeInMillis, int numberOfOnGoing, boolean resultSuccess) {
+        recordMetricsEvent_LivenssCheckCompletion(
+                mIkeConnectionCtrl, elapsedTimeInMillis, numberOfOnGoing, resultSuccess);
     }
 }
