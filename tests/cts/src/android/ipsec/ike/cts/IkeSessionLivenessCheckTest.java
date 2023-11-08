@@ -29,9 +29,14 @@ import android.net.ipsec.ike.IkeSession;
 import android.net.ipsec.ike.IkeSessionCallback;
 import android.net.ipsec.ike.IkeSessionParams;
 import android.net.ipsec.ike.IkeTrafficSelector;
+import android.os.Build;
 
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 
+import com.android.testutils.DevSdkIgnoreRule;
+import com.android.testutils.DevSdkIgnoreRule.IgnoreUpTo;
+
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
@@ -46,6 +51,8 @@ import java.util.Arrays;
  */
 @RunWith(AndroidJUnit4.class)
 public class IkeSessionLivenessCheckTest extends IkeSessionTestBase {
+
+    @Rule public final DevSdkIgnoreRule ignoreRule = new DevSdkIgnoreRule();
 
     // This value is align with the test vectors hex that are generated in an IPv4 environment
     private static final IkeTrafficSelector TRANSPORT_MODE_INBOUND_TS =
@@ -88,7 +95,14 @@ public class IkeSessionLivenessCheckTest extends IkeSessionTestBase {
                 mFirstChildSessionCallback);
     }
 
+    /**
+     * Test Liveness Checks. Test coverage up to Android U is ignored because the Liveness APIs are
+     * not available in versions below, including SDK 34.
+     *
+     * @throws java.lang.NoSuchMethodError if sdk {@code VERSION_CODES.UPSIDE_DOWN_CAKE} or less
+     */
     @Test
+    @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     public void testIkeLivenessCheck() throws Exception {
 
         final String ikeInitResp =
