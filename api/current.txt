@@ -177,6 +177,7 @@ package android.net.ipsec.ike {
     ctor public IkeSession(@NonNull android.content.Context, @NonNull android.net.ipsec.ike.IkeSessionParams, @NonNull android.net.ipsec.ike.ChildSessionParams, @NonNull java.util.concurrent.Executor, @NonNull android.net.ipsec.ike.IkeSessionCallback, @NonNull android.net.ipsec.ike.ChildSessionCallback);
     method public void close();
     method public void closeChildSession(@NonNull android.net.ipsec.ike.ChildSessionCallback);
+    method public void dumpIkeSessionInfo(@NonNull java.io.PrintWriter);
     method public void finalize();
     method public void kill();
     method public void openChildSession(@NonNull android.net.ipsec.ike.ChildSessionParams, @NonNull android.net.ipsec.ike.ChildSessionCallback);
