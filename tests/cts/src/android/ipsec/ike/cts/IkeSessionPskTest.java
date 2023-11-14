@@ -27,6 +27,7 @@ import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_T
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 
 import android.net.LinkAddress;
 import android.net.ipsec.ike.ChildSessionConfiguration;
@@ -40,9 +41,13 @@ import android.platform.test.annotations.AppModeFull;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.filters.SdkSuppress;
 
+import com.android.modules.utils.build.SdkLevel;
+
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -160,6 +165,8 @@ public class IkeSessionPskTest extends IkeSessionPskTestBase {
                     additionalChildCb, additionalTransformRecordA, additionalTransformRecordB);
             additionalChildCb.awaitOnClosed();
 
+            verifyDumpIkeSessionInfo(ikeSession);
+
             // Close IKE Session
             ikeSession.close();
             performCloseIkeBlocking(expectedMsgId++, SUCCESS_DELETE_IKE_RESP);
@@ -235,6 +242,8 @@ public class IkeSessionPskTest extends IkeSessionPskTestBase {
                 mFirstChildSessionCallback.awaitNextCreatedIpSecTransform();
         verifyCreateIpSecTransformPair(firstTransformRecordA, firstTransformRecordB);
 
+        verifyDumpIkeSessionInfo(ikeSession);
+
         // Close IKE Session
         ikeSession.close();
         performCloseIkeBlocking(expectedMsgId++, true /* expectedUseEncap */, deleteIkeResp);
@@ -305,6 +314,8 @@ public class IkeSessionPskTest extends IkeSessionPskTestBase {
         IpSecTransformCallRecord firstTransformRecordB =
                 mFirstChildSessionCallback.awaitNextCreatedIpSecTransform();
         verifyCreateIpSecTransformPair(firstTransformRecordA, firstTransformRecordB);
+
+        verifyDumpIkeSessionInfo(ikeSession);
 
         // Close IKE Session
         ikeSession.close();
@@ -425,6 +436,8 @@ public class IkeSessionPskTest extends IkeSessionPskTestBase {
         assertEquals(ERROR_TYPE_TS_UNACCEPTABLE, protocolException.getErrorType());
         assertArrayEquals(EXPECTED_PROTOCOL_ERROR_DATA_NONE, protocolException.getErrorData());
 
+        verifyDumpIkeSessionInfo(ikeSession);
+
         ikeSession.kill();
         mIkeSessionCallback.awaitOnClosed();
     }
@@ -439,5 +452,13 @@ public class IkeSessionPskTest extends IkeSessionPskTestBase {
         mIkeSessionCallback = new LegacyTestIkeSessionCallback();
         mFirstChildSessionCallback = new LegacyTestChildSessionCallback();
         verifyIkeAuthHandlesFirstChildCreationFail();
+    }
+
+    private void verifyDumpIkeSessionInfo(IkeSession ikeSession) {
+        if (SdkLevel.isAtLeastV()) {
+            final StringWriter stringWriter = new StringWriter();
+            ikeSession.dumpIkeSessionInfo(new PrintWriter(stringWriter));
+            assertFalse(stringWriter.toString().isEmpty());
+        }
     }
 }
