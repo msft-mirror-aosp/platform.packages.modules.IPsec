@@ -34,6 +34,7 @@ import android.net.Network;
 import android.net.eap.EapSessionConfig;
 import android.net.ipsec.ike.ike3gpp.Ike3gppExtension;
 import android.os.PersistableBundle;
+import android.util.SparseArray;
 
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttribute;
@@ -44,6 +45,7 @@ import com.android.internal.net.ipsec.ike.message.IkePayload;
 import com.android.modules.utils.build.SdkLevel;
 import com.android.server.vcn.util.PersistableBundleUtils;
 
+import java.io.PrintWriter;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.net.Inet4Address;
@@ -355,6 +357,26 @@ public final class IkeSessionParams {
      */
     @SuppressLint("UnflaggedApi")
     public static final int IKE_DPD_DELAY_SEC_DISABLED = Integer.MAX_VALUE;
+
+    /** @hide */
+    public static final SparseArray<String> IP_VERSION_TO_STR;
+
+    static {
+        IP_VERSION_TO_STR = new SparseArray<>();
+        IP_VERSION_TO_STR.put(ESP_IP_VERSION_AUTO, "AUTO");
+        IP_VERSION_TO_STR.put(ESP_IP_VERSION_IPV4, "IPV4");
+        IP_VERSION_TO_STR.put(ESP_IP_VERSION_IPV6, "IPV6");
+    }
+
+    /** @hide */
+    public static final SparseArray<String> ENCAP_TYPE_TO_STR;
+
+    static {
+        ENCAP_TYPE_TO_STR = new SparseArray<>();
+        ENCAP_TYPE_TO_STR.put(ESP_ENCAP_TYPE_NONE, "NONE");
+        ENCAP_TYPE_TO_STR.put(ESP_ENCAP_TYPE_AUTO, "AUTO");
+        ENCAP_TYPE_TO_STR.put(ESP_ENCAP_TYPE_UDP, "UDP");
+    }
 
     /** @hide */
     @VisibleForTesting static final int IKE_HARD_LIFETIME_SEC_MINIMUM = 300; // 5 minutes
@@ -2313,5 +2335,51 @@ public final class IkeSessionParams {
         }
 
         // TODO: add methods for supporting IKE fragmentation.
+    }
+
+    /**
+     * Dumps the state of {@link IkeSessionParams}
+     *
+     * @param pw {@link PrintWriter} to write the state of the object.
+     * @hide
+     */
+    public void dump(PrintWriter pw, String prefix) {
+        pw.println("------------------------------");
+        pw.println("IkeSessionParams:");
+        pw.println(prefix + "Caller configured network: " + mCallerConfiguredNetwork);
+        pw.println(prefix + "Dpd Delay timer in secs: " + mDpdDelaySec);
+        pw.println(prefix + "Dscp: " + mDscp);
+        pw.println(prefix + "Esp ip version: " + IP_VERSION_TO_STR.get(mIpVersion));
+        pw.println(prefix + "Esp encap type: " + ENCAP_TYPE_TO_STR.get(mEncapType));
+        pw.println(prefix + "Force port4500 status: " + hasIkeOption(IKE_OPTION_FORCE_PORT_4500));
+        pw.println(prefix + "Hard life time in secs: " + mHardLifetimeSec);
+        pw.println(
+                prefix
+                        + "Liveness retransmission timer in millis : "
+                        + Arrays.toString(mLivenessRetransTimeoutMsList));
+        pw.println(prefix + "Nat keep alive delay in secs: " + mNattKeepaliveDelaySec);
+        pw.println(prefix + "Soft life time in secs: " + mSoftLifetimeSec);
+        pw.println(prefix + "Remote host name: " + mServerHostname);
+        pw.println(
+                prefix
+                        + "Retransmission timer in millis : "
+                        + Arrays.toString(mRetransTimeoutMsList));
+        for (IkeSaProposal saProposal : getIkeSaProposals()) {
+            pw.println();
+            pw.println(prefix + "IkeSaProposal:");
+            pw.println(
+                    prefix
+                            + "Encryption algorithm: "
+                            + saProposal.getEncryptionAlgorithms().toString());
+            pw.println(
+                    prefix
+                            + "Integrity algorithm: "
+                            + saProposal.getIntegrityAlgorithms().toString());
+            pw.println(prefix + "Dh Group algorithm: " + saProposal.getDhGroups().toString());
+            pw.println(
+                    prefix + "Prf algorithm: " + saProposal.getPseudorandomFunctions().toString());
+        }
+        pw.println("------------------------------");
+        pw.println();
     }
 }
