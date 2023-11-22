@@ -179,7 +179,8 @@ public final class IkeNotifyPayload extends IkeInformationalPayload {
     public static final int NOTIFY_TYPE_SIGNATURE_HASH_ALGORITHMS = 16431;
 
     private static final int NOTIFY_HEADER_LEN = 4;
-    private static final int ERROR_NOTIFY_TYPE_MAX = 16383;
+    /** @hide */
+    public static final int ERROR_NOTIFY_TYPE_MAX = 16383;
 
     private static final String NAT_DETECTION_DIGEST_ALGORITHM = "SHA-1";
 

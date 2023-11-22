@@ -38,6 +38,7 @@ import android.util.CloseGuard;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.net.ipsec.ike.IkeSessionStateMachine;
 
+import java.io.PrintWriter;
 import java.util.Objects;
 import java.util.concurrent.Executor;
 
@@ -458,5 +459,23 @@ public final class IkeSession implements AutoCloseable {
     @SystemApi
     public void requestLivenessCheck() {
         mIkeSessionStateMachine.requestLivenessCheck();
+    }
+
+    /**
+     * Dumps the state of {@link IkeSession} information for the clients
+     *
+     * @param pw Print writer
+     */
+    @SuppressLint("UnflaggedApi")
+    public void dumpIkeSessionInfo(@NonNull PrintWriter pw) {
+        pw.println();
+        pw.println("IkeSession:");
+        pw.println("------------------------------");
+        // Dump ike state machine
+        if (mIkeSessionStateMachine != null) {
+            pw.println();
+            mIkeSessionStateMachine.dump(pw);
+        }
+        pw.println("------------------------------");
     }
 }
