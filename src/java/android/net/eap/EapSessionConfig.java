@@ -579,7 +579,7 @@ public final class EapSessionConfig {
         /**
          * Retrieves the UICC app type
          *
-         * @return the type
+         * <p>return the type
          */
         public @UiccAppType int getAppType() {
             return mApptype;
@@ -761,7 +761,7 @@ public final class EapSessionConfig {
         /**
          * Retrieves the network name
          *
-         * @return the network name
+         * <p>return the network name
          */
         @NonNull
         public String getNetworkName() {
