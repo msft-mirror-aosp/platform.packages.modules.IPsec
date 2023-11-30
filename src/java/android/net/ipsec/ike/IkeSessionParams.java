@@ -22,6 +22,7 @@ import static android.system.OsConstants.AF_INET6;
 import static com.android.internal.net.ipsec.ike.utils.IkeCertUtils.certificateFromByteArray;
 import static com.android.internal.net.ipsec.ike.utils.IkeCertUtils.privateKeyFromByteArray;
 
+import android.annotation.FlaggedApi;
 import android.annotation.IntDef;
 import android.annotation.IntRange;
 import android.annotation.NonNull;
@@ -355,7 +356,7 @@ public final class IkeSessionParams {
      *
      * <p>@see {@link Builder#setDpdDelaySeconds}
      */
-    @SuppressLint("UnflaggedApi")
+    @FlaggedApi("com.android.ipsec.flags.dpd_disable_api")
     public static final int IKE_DPD_DELAY_SEC_DISABLED = Integer.MAX_VALUE;
 
     /** @hide */
@@ -858,6 +859,7 @@ public final class IkeSessionParams {
      * @hide
      */
     @SystemApi
+    @FlaggedApi("com.android.ipsec.flags.liveness_check_api")
     @NonNull
     public int[] getLivenessRetransmissionTimeoutsMillis() {
         return mLivenessRetransTimeoutMsList;
@@ -2141,6 +2143,7 @@ public final class IkeSessionParams {
          * @hide
          */
         @SystemApi
+        @FlaggedApi("com.android.ipsec.flags.liveness_check_api")
         @NonNull
         public Builder setLivenessRetransmissionTimeoutsMillis(
                 @NonNull int[] retransTimeoutMillisList) {
