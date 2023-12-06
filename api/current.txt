@@ -177,7 +177,7 @@ package android.net.ipsec.ike {
     ctor public IkeSession(@NonNull android.content.Context, @NonNull android.net.ipsec.ike.IkeSessionParams, @NonNull android.net.ipsec.ike.ChildSessionParams, @NonNull java.util.concurrent.Executor, @NonNull android.net.ipsec.ike.IkeSessionCallback, @NonNull android.net.ipsec.ike.ChildSessionCallback);
     method public void close();
     method public void closeChildSession(@NonNull android.net.ipsec.ike.ChildSessionCallback);
-    method public void dumpIkeSessionInfo(@NonNull java.io.PrintWriter);
+    method @FlaggedApi("com.android.ipsec.flags.dumpsys_api") public void dumpIkeSessionInfo(@NonNull java.io.PrintWriter);
     method public void finalize();
     method public void kill();
     method public void openChildSession(@NonNull android.net.ipsec.ike.ChildSessionParams, @NonNull android.net.ipsec.ike.ChildSessionCallback);
@@ -233,7 +233,7 @@ package android.net.ipsec.ike {
     method @NonNull public String getServerHostname();
     method @IntRange(from=0x78, to=0x15180) public int getSoftLifetimeSeconds();
     method public boolean hasIkeOption(int);
-    field public static final int IKE_DPD_DELAY_SEC_DISABLED = 2147483647; // 0x7fffffff
+    field @FlaggedApi("com.android.ipsec.flags.dpd_disable_api") public static final int IKE_DPD_DELAY_SEC_DISABLED = 2147483647; // 0x7fffffff
     field public static final int IKE_OPTION_ACCEPT_ANY_REMOTE_ID = 0; // 0x0
     field public static final int IKE_OPTION_EAP_ONLY_AUTH = 1; // 0x1
     field public static final int IKE_OPTION_FORCE_PORT_4500 = 3; // 0x3
