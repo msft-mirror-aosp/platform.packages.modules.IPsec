@@ -469,7 +469,7 @@ public final class IkeSession implements AutoCloseable {
      * @param pw Print writer
      */
     @FlaggedApi("com.android.ipsec.flags.dumpsys_api")
-    public void dumpIkeSessionInfo(@NonNull PrintWriter pw) {
+    public void dump(@NonNull PrintWriter pw) {
         pw.println();
         pw.println("IkeSession:");
         pw.println("------------------------------");

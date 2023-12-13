@@ -457,7 +457,7 @@ public class IkeSessionPskTest extends IkeSessionPskTestBase {
     private void verifyDumpIkeSessionInfo(IkeSession ikeSession) {
         if (SdkLevel.isAtLeastV()) {
             final StringWriter stringWriter = new StringWriter();
-            ikeSession.dumpIkeSessionInfo(new PrintWriter(stringWriter));
+            ikeSession.dump(new PrintWriter(stringWriter));
             assertFalse(stringWriter.toString().isEmpty());
         }
     }
