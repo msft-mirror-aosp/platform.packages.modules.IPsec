@@ -62,6 +62,7 @@ java_sdk_library {
 
     lint: {
         strict_updatability_linting: true,
+        baseline_filename: "lint-baseline.xml",
     },
 
     // Shared filegroups of BouncyCastle and frameworks are jar-jar'ed to avoid
@@ -75,9 +76,9 @@ java_sdk_library {
     ],
 
     permitted_packages: [
-       "com.android.internal.net",
-       "android.net.ipsec.ike",
-       "android.net.eap",
+        "com.android.internal.net",
+        "android.net.ipsec.ike",
+        "android.net.eap",
     ],
     min_sdk_version: "30",
 }
@@ -119,6 +120,9 @@ java_library {
         "modules-utils-statemachine",
     ],
     sdk_version: "module_current",
+    lint: {
+        baseline_filename: "lint-baseline.xml",
+    },
 }
 
 java_library {
@@ -127,7 +131,7 @@ java_library {
     srcs: [":ike-srcs"],
     libs: [
         "unsupportedappusage",
-        "conscrypt.module.public.api"
+        "conscrypt.module.public.api",
     ],
     static_libs: ["ike-internals"],
 
@@ -137,6 +141,9 @@ java_library {
     // overshadowed by the IKE jar in framework and bootclasspath which will
     // cause compiling and runtime errors respectively.
     jarjar_rules: "jarjar-rules-test.txt",
+    lint: {
+        baseline_filename: "lint-baseline.xml",
+    },
 }
 
 java_library {
@@ -144,6 +151,9 @@ java_library {
     installable: false, // Used only for building the "ike-test-utils"
     srcs: ["src/java/**/IkeCertUtils.java"],
     jarjar_rules: "jarjar-rules-test.txt",
+    lint: {
+        baseline_filename: "lint-baseline.xml",
+    },
 }
 
 java_library {
@@ -154,7 +164,10 @@ java_library {
     ],
     static_libs: ["ike-test-utils-dependency"],
     libs: ["androidx.test.rules"],
-    visibility: ["//packages/modules/IPsec/tests/cts"]
+    visibility: ["//packages/modules/IPsec/tests/cts"],
+    lint: {
+        baseline_filename: "lint-baseline.xml",
+    },
 }
 
 sdk {
@@ -179,6 +192,6 @@ genrule {
     name: "statslog-ike-java-gen",
     tools: ["stats-log-api-gen"],
     cmd: "$(location stats-log-api-gen) --java $(out) --module ike" +
-         " --javaPackage com.android.internal.net.ipsec.ike.utils --javaClass IkeMetricsInterface",
+        " --javaPackage com.android.internal.net.ipsec.ike.utils --javaClass IkeMetricsInterface",
     out: ["com/android/internal/net/ipsec/ike/utils/IkeMetricsInterface.java"],
 }
