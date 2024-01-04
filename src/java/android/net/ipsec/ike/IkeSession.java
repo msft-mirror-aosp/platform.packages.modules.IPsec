@@ -81,7 +81,7 @@ public final class IkeSession implements AutoCloseable {
      *
      * @hide
      */
-    public static final String CONTEXT_ATTRIBUTION_TAG_VPN = "VPN";
+    public static final String CONTEXT_ATTRIBUTION_TAG_VPN = "VPN_MANAGER";
 
     @VisibleForTesting final IkeSessionStateMachine mIkeSessionStateMachine;
 
