@@ -22,9 +22,9 @@ import android.net.Network;
 import android.net.SocketKeepalive;
 
 /** Shim utilities for SDK U and above */
-public class ShimUtilsMinU extends ShimUtilsT {
+public class ShimUtilsU extends ShimUtilsT {
     // Package protected constructor for ShimUtils to access
-    ShimUtilsMinU() {
+    ShimUtilsU() {
         super();
     }
 
