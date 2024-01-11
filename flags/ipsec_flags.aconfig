@@ -20,3 +20,10 @@ flag {
   description: "Expose API to dump ike session info for debugging support."
   bug: "308513922"
 }
+
+flag {
+  name: "enabled_ike_options_api"
+  namespace: "ipsec"
+  description: "Expose API to return enabled IKE options"
+  bug: "308513922"
+}
