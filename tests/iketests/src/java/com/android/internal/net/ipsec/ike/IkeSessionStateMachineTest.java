@@ -5736,8 +5736,12 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         assertNull(mIkeSessionStateMachine.getCurrentState());
     }
 
-    private void mockSendRekeyChildReq() throws Exception {
-        setupIdleStateMachine();
+    private void mockSendRekeyChildReq(boolean withMobike) throws Exception {
+        if (withMobike) {
+            setupIdleStateMachineWithMobike();
+        } else {
+            setupIdleStateMachine();
+        }
 
         ChildLocalRequest childLocalRequest =
                 mLocalRequestFactory.getChildLocalRequest(
@@ -5778,7 +5782,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         long currentTime = 0;
         int retryCnt = 0;
 
-        mockSendRekeyChildReq();
+        mockSendRekeyChildReq(false);
 
         while (currentTime + RETRY_INTERVAL_MS < TEMP_FAILURE_RETRY_TIMEOUT_MS) {
             mockRcvTempFail();
@@ -7313,6 +7317,164 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
             verifyNetworkAndLocalAddressUpdated(
                     newNetwork, UPDATED_LOCAL_ADDRESS_V6, REMOTE_ADDRESS_V6, callback);
         }
+    }
+
+    private void verifyRetransmitSuspendedAndResumedOnNewNetwork(
+            Class<?> expectedStateOfSuspended, Class<?> expectedStateOfResumed) {
+        // Make sure the retransmit flag is set to suspended.
+        assertTrue(mIkeSessionStateMachine.mIsRetransmitSuspended);
+
+        // Make sure if there is no future retransmission.
+        verifyRetransmissionStopped();
+
+        // Make sure the state machine is still alive.
+        assertTrue(expectedStateOfSuspended.isInstance(mIkeSessionStateMachine.getCurrentState()));
+
+        // Elapse all retransmission timeouts.
+        int[] timeouts =
+                mIkeSessionStateMachine.mIkeSessionParams.getRetransmissionTimeoutsMillis();
+        for (long delay : timeouts) {
+            mLooper.dispatchAll();
+            mLooper.moveTimeForward(delay);
+        }
+        mLooper.dispatchAll();
+
+        // Connect to a new underlying network.
+        // DPD packet should be sent by resuming retransmission.
+        mIkeSessionStateMachine.onUnderlyingNetworkUpdated();
+        mLooper.dispatchAll();
+
+        // Make sure the retransmit flag is set to unsuspended.
+        assertFalse(mIkeSessionStateMachine.mIsRetransmitSuspended);
+
+        // Make sure if there is future retransmission.
+        verifyRetransmissionStarted();
+
+        // Make sure the state machine is still alive.
+        assertTrue(expectedStateOfResumed.isInstance(mIkeSessionStateMachine.getCurrentState()));
+    }
+
+    @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
+    public void testSuspendRetransmission_inDpd() throws Exception {
+        setupIdleStateMachineWithMobike();
+
+        // Start DPD task.
+        mIkeSessionStateMachine.sendMessage(
+                CMD_FORCE_TRANSITION, mIkeSessionStateMachine.mDpdIkeLocalInfo);
+        mLooper.dispatchAll();
+
+        // Verify that retransmission has started.
+        verifyRetransmissionStarted();
+        verifyEmptyInformationalSent(1, false /* expectedResp*/);
+
+        // Disconnect from the underlying network.
+        mIkeSessionStateMachine.onUnderlyingNetworkDied(mMockDefaultNetwork);
+        mLooper.dispatchAll();
+
+        verifyRetransmitSuspendedAndResumedOnNewNetwork(
+                IkeSessionStateMachine.DpdIkeLocalInfo.class,
+                IkeSessionStateMachine.DpdIkeLocalInfo.class);
+    }
+
+    @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
+    public void testSuspendRetransmission_beforeEnteringDpd() throws Exception {
+        setupIdleStateMachineWithMobike();
+
+        // Disconnect from the underlying network.
+        mIkeSessionStateMachine.onUnderlyingNetworkDied(mMockDefaultNetwork);
+
+        // Start DPD task.
+        mIkeSessionStateMachine.sendMessage(
+                CMD_FORCE_TRANSITION, mIkeSessionStateMachine.mDpdIkeLocalInfo);
+        mLooper.dispatchAll();
+
+        verifyRetransmitSuspendedAndResumedOnNewNetwork(
+                IkeSessionStateMachine.DpdIkeLocalInfo.class,
+                IkeSessionStateMachine.DpdIkeLocalInfo.class);
+        verifyEmptyInformationalSent(1, false /* expectedResp*/);
+    }
+
+    @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
+    public void testSuspendRetransmission_inIdle() throws Exception {
+        setupIdleStateMachineWithMobike();
+
+        // Disconnect from the underlying network.
+        mIkeSessionStateMachine.onUnderlyingNetworkDied(mMockDefaultNetwork);
+        mLooper.dispatchAll();
+
+        verifyRetransmitSuspendedAndResumedOnNewNetwork(
+                IkeSessionStateMachine.Idle.class, IkeSessionStateMachine.MobikeLocalInfo.class);
+    }
+
+    @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
+    public void testSuspendRetransmission_inRekeyChild() throws Exception {
+        // Step 1. Init with the mobike and verify sending RekeyChildCreate request
+        // Send the RekeyChildCreate
+        mockSendRekeyChildReq(true);
+        // Verify that message is EXCHANGE_TYPE_CREATE_CHILD_SA.
+        verify(mMockIkeMessageHelper, times(1))
+                .encryptAndEncode(
+                        anyObject(),
+                        anyObject(),
+                        eq(mSpyCurrentIkeSaRecord),
+                        mIkeMessageCaptor.capture(),
+                        anyBoolean(),
+                        anyInt());
+        IkeMessage createChildMessage = mIkeMessageCaptor.getValue();
+        assertEquals(
+                IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA, createChildMessage.ikeHeader.exchangeType);
+
+        // Verify that retransmission has started.
+        verifyRetransmissionStarted();
+
+        // Step 2. Underlying network died, verify retransmission is suspended
+        // Disconnect from the underlying network.
+        mIkeSessionStateMachine.onUnderlyingNetworkDied(mMockDefaultNetwork);
+        mLooper.dispatchAll();
+        // Make sure the retransmit flag is set to suspended.
+        assertTrue(mIkeSessionStateMachine.mIsRetransmitSuspended);
+        // Make sure if there is no future retransmission.
+        verifyRetransmissionStopped();
+
+        // Step 3. Receive a response with the last packet before the network dies, verify child
+        // notifies to send the RekeyChildDelete request but should not be sent.
+        // Mocking receiving response
+        ReceivedIkePacket dummyCreateChildResp = makeCreateChildCreateMessage(true /*isResp*/);
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, dummyCreateChildResp);
+        mLooper.dispatchAll();
+        // Make sure it is received.
+        verify(mMockChildSessionStateMachine)
+                .receiveResponse(eq(IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA), any());
+        // Send the DeleteRekeyChildRequest
+        List<IkePayload> mockRekeyDeletePayloads = Arrays.asList(mock(IkePayload.class));
+        mDummyChildSmCallback.onOutboundPayloadsReady(
+                IkeHeader.EXCHANGE_TYPE_INFORMATIONAL,
+                false /*isResp*/,
+                mockRekeyDeletePayloads,
+                mMockChildSessionStateMachine);
+        mLooper.dispatchAll();
+        // Verify that message is EXCHANGE_TYPE_INFORMATIONAL.
+        verify(mMockIkeMessageHelper, times(2))
+                .encryptAndEncode(
+                        anyObject(),
+                        anyObject(),
+                        eq(mSpyCurrentIkeSaRecord),
+                        mIkeMessageCaptor.capture(),
+                        anyBoolean(),
+                        anyInt());
+        IkeMessage deleteChildMessage = mIkeMessageCaptor.getValue();
+        assertEquals(
+                IkeHeader.EXCHANGE_TYPE_INFORMATIONAL, deleteChildMessage.ikeHeader.exchangeType);
+
+        // Step 4. Network updated, verify the RekeyChildDelete request is sent
+        verifyRetransmitSuspendedAndResumedOnNewNetwork(
+                IkeSessionStateMachine.ChildProcedureOngoing.class,
+                IkeSessionStateMachine.ChildProcedureOngoing.class);
     }
 
     @Test
