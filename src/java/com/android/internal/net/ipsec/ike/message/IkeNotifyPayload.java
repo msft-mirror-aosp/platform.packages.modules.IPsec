@@ -254,6 +254,8 @@ public final class IkeNotifyPayload extends IkeInformationalPayload {
         NOTIFY_TYPE_TO_STRING.put(NOTIFY_TYPE_UPDATE_SA_ADDRESSES, "UPDATE_SA_ADDRESSES");
         NOTIFY_TYPE_TO_STRING.put(NOTIFY_TYPE_COOKIE2, "COOKIE2");
         NOTIFY_TYPE_TO_STRING.put(
+                NOTIFY_TYPE_EAP_ONLY_AUTHENTICATION, "EAP-only Authentication");
+        NOTIFY_TYPE_TO_STRING.put(
                 NOTIFY_TYPE_IKEV2_FRAGMENTATION_SUPPORTED, "Fragmentation supported");
         NOTIFY_TYPE_TO_STRING.put(
                 NOTIFY_TYPE_SIGNATURE_HASH_ALGORITHMS, "Generic Digital Signatures supported");
