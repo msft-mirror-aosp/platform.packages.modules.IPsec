@@ -179,15 +179,6 @@ sdk {
     ],
 }
 
-java_api_contribution {
-    name: "android-net-ipsec-ike-public-stubs",
-    api_surface: "public",
-    api_file: "api/current.txt",
-    visibility: [
-        "//build/orchestrator/apis",
-    ],
-}
-
 genrule {
     name: "statslog-ike-java-gen",
     tools: ["stats-log-api-gen"],
