@@ -60,9 +60,11 @@ import java.security.interfaces.RSAKey;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -889,6 +891,31 @@ public final class IkeSessionParams {
      */
     public boolean hasIkeOption(@IkeOption int ikeOption) {
         return hasIkeOption(mIkeOptions, ikeOption);
+    }
+
+    /**
+     * Return all the enabled IKE Options
+     *
+     * @return A Set of enabled IKE options that have been added using {@link
+     *     Builder#addIkeOption(int)}
+     */
+    @FlaggedApi("com.android.ipsec.flags.enabled_ike_options_api")
+    @NonNull
+    @IkeOption
+    public Set<Integer> getIkeOptions() {
+        final Set<Integer> result = new HashSet<>();
+
+        long ikeOptionBits = mIkeOptions;
+        int optionValue = 0;
+        while (ikeOptionBits > 0) {
+            if ((ikeOptionBits & 1) == 1) {
+                result.add(optionValue);
+            }
+            ikeOptionBits >>>= 1;
+            optionValue++;
+        }
+
+        return result;
     }
 
     /** @hide */
@@ -2199,9 +2226,6 @@ public final class IkeSessionParams {
          * @return Builder this, to facilitate chaining.
          * @throws IllegalArgumentException if the provided option is invalid.
          */
-        // Use #hasIkeOption instead of @getIkeOptions because #hasIkeOption allows callers to check
-        // the presence of one IKE option more easily
-        @SuppressLint("MissingGetterMatchingBuilder")
         @NonNull
         public Builder addIkeOption(@IkeOption int ikeOption) {
             return addIkeOptionInternal(ikeOption);
