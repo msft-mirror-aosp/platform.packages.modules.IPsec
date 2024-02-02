@@ -222,6 +222,7 @@ package android.net.ipsec.ike {
   public final class IkeSessionParams {
     method @IntRange(from=0x14) public int getDpdDelaySeconds();
     method @IntRange(from=0x12c, to=0x15180) public int getHardLifetimeSeconds();
+    method @FlaggedApi("com.android.ipsec.flags.enabled_ike_options_api") @NonNull public java.util.Set<java.lang.Integer> getIkeOptions();
     method @NonNull public java.util.List<android.net.ipsec.ike.IkeSaProposal> getIkeSaProposals();
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.IkeAuthConfig getLocalAuthConfig();
     method @NonNull public android.net.ipsec.ike.IkeIdentification getLocalIdentification();
