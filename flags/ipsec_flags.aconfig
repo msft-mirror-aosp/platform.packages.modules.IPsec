@@ -1,4 +1,5 @@
 package: "com.android.ipsec.flags"
+container: "com.android.ipsec"
 
 flag {
   name: "liveness_check_api"
