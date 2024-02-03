@@ -22,6 +22,7 @@ import static android.system.OsConstants.AF_INET6;
 import static com.android.internal.net.ipsec.ike.utils.IkeCertUtils.certificateFromByteArray;
 import static com.android.internal.net.ipsec.ike.utils.IkeCertUtils.privateKeyFromByteArray;
 
+import android.annotation.FlaggedApi;
 import android.annotation.IntDef;
 import android.annotation.IntRange;
 import android.annotation.NonNull;
@@ -59,9 +60,11 @@ import java.security.interfaces.RSAKey;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -355,7 +358,7 @@ public final class IkeSessionParams {
      *
      * <p>@see {@link Builder#setDpdDelaySeconds}
      */
-    @SuppressLint("UnflaggedApi")
+    @FlaggedApi("com.android.ipsec.flags.dpd_disable_api")
     public static final int IKE_DPD_DELAY_SEC_DISABLED = Integer.MAX_VALUE;
 
     /** @hide */
@@ -858,6 +861,7 @@ public final class IkeSessionParams {
      * @hide
      */
     @SystemApi
+    @FlaggedApi("com.android.ipsec.flags.liveness_check_api")
     @NonNull
     public int[] getLivenessRetransmissionTimeoutsMillis() {
         return mLivenessRetransTimeoutMsList;
@@ -887,6 +891,31 @@ public final class IkeSessionParams {
      */
     public boolean hasIkeOption(@IkeOption int ikeOption) {
         return hasIkeOption(mIkeOptions, ikeOption);
+    }
+
+    /**
+     * Return all the enabled IKE Options
+     *
+     * @return A Set of enabled IKE options that have been added using {@link
+     *     Builder#addIkeOption(int)}
+     */
+    @FlaggedApi("com.android.ipsec.flags.enabled_ike_options_api")
+    @NonNull
+    @IkeOption
+    public Set<Integer> getIkeOptions() {
+        final Set<Integer> result = new HashSet<>();
+
+        long ikeOptionBits = mIkeOptions;
+        int optionValue = 0;
+        while (ikeOptionBits > 0) {
+            if ((ikeOptionBits & 1) == 1) {
+                result.add(optionValue);
+            }
+            ikeOptionBits >>>= 1;
+            optionValue++;
+        }
+
+        return result;
     }
 
     /** @hide */
@@ -2141,6 +2170,7 @@ public final class IkeSessionParams {
          * @hide
          */
         @SystemApi
+        @FlaggedApi("com.android.ipsec.flags.liveness_check_api")
         @NonNull
         public Builder setLivenessRetransmissionTimeoutsMillis(
                 @NonNull int[] retransTimeoutMillisList) {
@@ -2196,9 +2226,6 @@ public final class IkeSessionParams {
          * @return Builder this, to facilitate chaining.
          * @throws IllegalArgumentException if the provided option is invalid.
          */
-        // Use #hasIkeOption instead of @getIkeOptions because #hasIkeOption allows callers to check
-        // the presence of one IKE option more easily
-        @SuppressLint("MissingGetterMatchingBuilder")
         @NonNull
         public Builder addIkeOption(@IkeOption int ikeOption) {
             return addIkeOptionInternal(ikeOption);
