@@ -457,4 +457,44 @@ public class IkeNattKeepaliveTest {
         hardwareKeepaliveCbOne.onStopped(mMockHardwareKeepaliveOne);
         verifyHardwareKeepaliveStarted(mHardwareKeepaliveTwo, newKeepaliveConfigTwo);
     }
+
+    @Test
+    public void testSwitchToHardwareKeepalive_duringNetworkError() throws Exception {
+        final KeepaliveConfig newKeepaliveConfigOne =
+                createCopyWithNewUnderlyingNetwork(mKeepaliveConfig);
+        final KeepaliveConfig newKeepaliveConfigTwo =
+                createCopyWithNewUnderlyingNetwork(mKeepaliveConfig);
+
+        // First round of restart
+        final HardwareKeepaliveImpl.HardwareKeepaliveCallback hardwareKeepaliveCb =
+                verifyHardwareKeepaliveImplAndGetCb();
+        restartFromHardwareKeepalive(
+                newKeepaliveConfigOne,
+                mMockHardwareKeepalive,
+                mMockHardwareKeepaliveOne,
+                mMockSoftwareKeepaliveOne);
+
+        hardwareKeepaliveCb.onStopped(mMockHardwareKeepalive);
+        verify(mMockSoftwareKeepaliveOne).stop();
+        verifyHardwareKeepaliveStarted(mMockHardwareKeepaliveOne, newKeepaliveConfigOne);
+
+        // Second round of restart
+        final HardwareKeepaliveImpl.HardwareKeepaliveCallback hardwareKeepaliveCbOne =
+                verifyHardwareKeepaliveImplAndGetCb();
+        restartFromHardwareKeepalive(
+                newKeepaliveConfigTwo,
+                mMockHardwareKeepaliveOne,
+                mHardwareKeepaliveTwo,
+                mMockSoftwareKeepaliveTwo);
+
+        // If stop keepalive, such as when the Ike Session is terminated,
+        mIkeNattKeepalive.stop();
+        // no need to start hardware keepalive anymore.
+        verifyHardwareKeepaliveNeverStarted(mHardwareKeepaliveTwo);
+
+        // Since IkeNattKeepalive is stopped,
+        hardwareKeepaliveCbOne.onStopped(mMockHardwareKeepaliveOne);
+        // no need to start hardware keepalive anymore.
+        verifyHardwareKeepaliveNeverStarted(mHardwareKeepaliveTwo);
+    }
 }
