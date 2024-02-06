@@ -332,6 +332,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
     static final int CMD_SET_UNDERPINNED_NETWORK = CMD_GENERAL_BASE + 19;
     /** Initiate liveness check and sends callbacks. */
     static final int CMD_REQUEST_LIVENESS_CHECK = CMD_GENERAL_BASE + 20;
+    /** Event for underlying network died with mobility */
+    static final int CMD_UNDERLYING_NETWORK_DIED_WITH_MOBILITY = CMD_GENERAL_BASE + 21;
+    /** Event for underlying network updated with mobility */
+    static final int CMD_UNDERLYING_NETWORK_UPDATED_WITH_MOBILITY = CMD_GENERAL_BASE + 22;
     /** Force state machine to a target state for testing purposes. */
     static final int CMD_FORCE_TRANSITION = CMD_GENERAL_BASE + 99;
 
@@ -365,6 +369,11 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         CMD_TO_STR.put(CMD_SET_NETWORK, "Update underlying Network");
         CMD_TO_STR.put(CMD_SET_UNDERPINNED_NETWORK, "Set underpinned Network");
         CMD_TO_STR.put(CMD_REQUEST_LIVENESS_CHECK, "Request liveness check");
+        CMD_TO_STR.put(
+                CMD_UNDERLYING_NETWORK_DIED_WITH_MOBILITY, "UnderlyingNetwork died with mobility");
+        CMD_TO_STR.put(
+                CMD_UNDERLYING_NETWORK_UPDATED_WITH_MOBILITY,
+                "UnderlyingNetwork updated with mobility");
         CMD_TO_STR.put(CMD_IKE_FATAL_ERROR_FROM_CHILD, "IKE fatal error from Child");
         CMD_TO_STR.put(CMD_LOCAL_REQUEST_CREATE_IKE, "Create IKE");
         CMD_TO_STR.put(CMD_LOCAL_REQUEST_DELETE_IKE, "Delete IKE");
@@ -444,6 +453,9 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
     /** Package */
     @VisibleForTesting LivenessAssister mLivenessAssister;
+
+    /** Package */
+    @VisibleForTesting boolean mIsRetransmitSuspended;
 
     // States
     @VisibleForTesting
@@ -1523,6 +1535,16 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                     }
                     return HANDLED;
 
+                case CMD_UNDERLYING_NETWORK_DIED_WITH_MOBILITY:
+                    // Set a flag in the IkeSessionStateMachine to suspend retransmission.
+                    mIsRetransmitSuspended = true;
+                    return HANDLED;
+
+                case CMD_UNDERLYING_NETWORK_UPDATED_WITH_MOBILITY:
+                    // Unset a flag to resume retransmission.
+                    mIsRetransmitSuspended = false;
+                    return HANDLED;
+
                 case CMD_REQUEST_LIVENESS_CHECK:
                     // Since there is no other running requests in idle state, the on-demand DPD
                     // can be taken place in the scheduler. At this time, the liveness check can be
@@ -1868,6 +1890,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
      * IKE packet. Idle state will defer the received packet to a BusyState to process it.
      */
     private abstract class BusyState extends LocalRequestQueuer {
+        protected Retransmitter mRetransmitter;
+
         @Override
         public boolean processStateMessage(Message message) {
             switch (message.what) {
@@ -1923,6 +1947,26 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                         return HANDLED;
                     }
                     mLivenessAssister.livenessCheckRequested(LivenessAssister.REQ_TYPE_BACKGROUND);
+                    return HANDLED;
+
+                case CMD_UNDERLYING_NETWORK_DIED_WITH_MOBILITY:
+                    // Sets a flag to suspend retransmission.
+                    mIsRetransmitSuspended = true;
+
+                    // Suspends retransmissions only if retransmission is in progress.
+                    if (mRetransmitter != null) {
+                        mRetransmitter.suspendRetransmitting();
+                    }
+                    return HANDLED;
+
+                case CMD_UNDERLYING_NETWORK_UPDATED_WITH_MOBILITY:
+                    // Unsets a flag to resume retransmission.
+                    mIsRetransmitSuspended = false;
+
+                    // Restarts retransmissions only when in suspend state.
+                    if (mRetransmitter != null) {
+                        mRetransmitter.restartRetransmitting();
+                    }
                     return HANDLED;
 
                 default:
@@ -2357,7 +2401,13 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                             mEnabledExtensions.contains(EXTENSION_TYPE_FRAGMENTATION),
                             DEFAULT_FRAGMENT_SIZE);
 
-            retransmit();
+            if (mIsRetransmitSuspended) {
+                // If already suspended retransmit, set as suspended.
+                suspendRetransmitting();
+            } else {
+                // start retransmit.
+                retransmit();
+            }
         }
 
         @Override
@@ -2641,8 +2691,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         private int mLastInboundRequestMsgId;
         private List<IkePayload> mOutboundRespPayloads;
         private Set<ChildSessionStateMachine> mAwaitingChildResponse;
-
-        private EncryptedRetransmitter mRetransmitter;
 
         @Override
         public void enterState() {
@@ -3146,7 +3194,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
         private IkeSecurityParameterIndex mLocalIkeSpiResource;
         private IkeSecurityParameterIndex mRemoteIkeSpiResource;
-        private Retransmitter mRetransmitter;
 
         // TODO: Support negotiating IKE fragmentation
 
@@ -3623,7 +3670,14 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             private UnencryptedRetransmitter(IkeMessage msg) {
                 super(getHandler(), msg, mIkeSessionParams.getRetransmissionTimeoutsMillis());
                 mIkePacket = msg.encode();
-                retransmit();
+
+                if (mIsRetransmitSuspended) {
+                    // If already suspended retransmit, set as suspended.
+                    suspendRetransmitting();
+                } else {
+                    // start retransmit.
+                    retransmit();
+                }
             }
 
             @Override
@@ -3758,7 +3812,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
      */
     abstract class CreateIkeLocalIkeAuthBase<T extends IkeInitData> extends DeleteBase {
         protected T mSetupData;
-        protected Retransmitter mRetransmitter;
         protected EapInfo mEapInfo = null;
 
         @Override
@@ -4939,8 +4992,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
     /** RekeyIkeLocalCreate represents state when IKE library initiates Rekey IKE exchange. */
     class RekeyIkeLocalCreate extends RekeyIkeHandlerBase {
-        protected Retransmitter mRetransmitter;
-
         @Override
         public void enterState() {
             try {
@@ -5252,8 +5303,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
      * rekeying when IKE library is waiting for both a Delete request and a Delete response.
      */
     class SimulRekeyIkeLocalDeleteRemoteDelete extends RekeyIkeDeleteBase {
-        private Retransmitter mRetransmitter;
-
         @Override
         public void enterState() {
             // Detemine surviving IKE SA. According to RFC 7296: "The new IKE SA containing the
@@ -5359,8 +5408,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
      * response during simultaneous rekeying.
      */
     class SimulRekeyIkeLocalDelete extends RekeyIkeDeleteBase {
-        private Retransmitter mRetransmitter;
-
         @Override
         public void enterState() {
             mRetransmitter = new EncryptedRetransmitter(mIkeSaRecordAwaitingLocalDel, null);
@@ -5475,8 +5522,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
      * methods for initiating and finishing the deleting stage for IKE rekeying.
      */
     class RekeyIkeLocalDelete extends SimulRekeyIkeLocalDelete {
-        private Retransmitter mRetransmitter;
-
         @Override
         public void enterState() {
             mIkeSaRecordSurviving = mLocalInitNewIkeSaRecord;
@@ -5547,8 +5592,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
     /** DeleteIkeLocalDelete initiates a deletion request of the current IKE Session. */
     class DeleteIkeLocalDelete extends DeleteBase {
-        private Retransmitter mRetransmitter;
-
         @Override
         public void enterState() {
             mRetransmitter = new EncryptedRetransmitter(buildIkeDeleteReq(mCurrentIkeSaRecord));
@@ -5615,8 +5658,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
     /** DpdIkeLocalInfo initiates a dead peer detection for IKE Session. */
     class DpdIkeLocalInfo extends DeleteBase {
-        private Retransmitter mRetransmitter;
-
         @Override
         public void enterState() {
             mRetransmitter =
@@ -5715,8 +5756,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
      * UPDATE_SA_ADDRESSES exchange for the IKE Session.
      */
     class MobikeLocalInfo extends DeleteBase {
-        private Retransmitter mRetransmitter;
-
         @Override
         public void enterState() {
             if (!mEnabledExtensions.contains(EXTENSION_TYPE_MOBIKE)) {
@@ -6119,7 +6158,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
     // This call will be only fired when mIkeConnectionCtrl.isMobilityEnabled() is true
     @Override
     public void onUnderlyingNetworkUpdated() {
-        // TODO(b/172013873): restart transmission timeouts on IKE SAs after changing networks
+        // Send event for mobility.
+        sendMessage(CMD_UNDERLYING_NETWORK_UPDATED_WITH_MOBILITY);
+
+        // UPDATE_SA
         sendMessage(
                 CMD_LOCAL_REQUEST_MOBIKE,
                 mLocalRequestFactory.getIkeLocalRequest(CMD_LOCAL_REQUEST_MOBIKE));
@@ -6128,6 +6170,9 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
     @Override
     public void onUnderlyingNetworkDied(Network network) {
         if (mIkeConnectionCtrl.isMobilityEnabled()) {
+            // Send event for mobility.
+            sendMessage(CMD_UNDERLYING_NETWORK_DIED_WITH_MOBILITY);
+
             // Do not tear down the session because 1) callers might want to migrate the IKE Session
             // when another network is available; 2) the termination from IKE Session might be
             // racing with the termination call from the callers.
