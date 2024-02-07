@@ -21,6 +21,7 @@ package {
 aconfig_declarations {
     name: "ipsec_aconfig_flags",
     package: "com.android.ipsec.flags",
+    container: "com.android.ipsec",
     srcs: ["ipsec_flags.aconfig"],
 }
 
@@ -32,4 +33,3 @@ java_aconfig_library {
         "com.android.ipsec",
     ],
 }
-
