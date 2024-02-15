@@ -34,6 +34,7 @@ import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import android.content.Context;
@@ -46,12 +47,16 @@ import android.net.LinkProperties;
 import android.net.Network;
 import android.net.NetworkCapabilities;
 import android.net.SocketKeepalive;
+import android.net.ipsec.test.ike.IkeManager;
+import android.net.ipsec.test.ike.IkeSession;
 import android.os.Handler;
 import android.os.PowerManager;
 
 import com.android.internal.net.ipsec.test.ike.net.IkeLocalAddressGenerator;
 import com.android.internal.net.ipsec.test.ike.testutils.MockIpSecTestUtils;
+import com.android.internal.net.ipsec.test.ike.utils.IState;
 import com.android.internal.net.ipsec.test.ike.utils.IkeAlarmReceiver;
+import com.android.internal.net.ipsec.test.ike.utils.IkeMetrics;
 import com.android.internal.net.ipsec.test.ike.utils.RandomnessFactory;
 
 import org.junit.Before;
@@ -86,6 +91,7 @@ public abstract class IkeSessionTestBase {
     protected Context mSpyContext;
     protected IpSecManager mIpSecManager;
     protected PowerManager mPowerManager;
+    protected IkeMetrics mIkeMetrics;
 
     protected ConnectivityManager mMockConnectManager;
     protected Network mMockDefaultNetwork;
@@ -139,6 +145,11 @@ public abstract class IkeSessionTestBase {
 
         mMockIkeLocalAddressGenerator = mock(IkeLocalAddressGenerator.class);
         resetMockConnectManager();
+
+        // Setup metrics parameters
+        mIkeMetrics = mock(IkeMetrics.class);
+        IkeManager.setIkeMetrics(mIkeMetrics);
+        doReturn(IkeSession.CONTEXT_ATTRIBUTION_TAG_VCN).when(mSpyContext).getAttributionTag();
     }
 
     protected void resetMockConnectManager() throws Exception {
@@ -233,5 +244,17 @@ public abstract class IkeSessionTestBase {
                 })
                 .when(network)
                 .getAllByName(REMOTE_HOSTNAME);
+    }
+
+    protected void verifyMetricsLogged(int sessionType, int stateCode, int exceptionCode) {
+        verify(mIkeMetrics)
+                .logSessionTerminated(
+                        IkeMetrics.IKE_CALLER_UNKNOWN, sessionType, stateCode, exceptionCode);
+    }
+
+    protected int getStateCode(IState state) {
+        return state instanceof AbstractSessionStateMachine.ExceptionHandlerBase
+                ? ((AbstractSessionStateMachine.ExceptionHandlerBase) state).getMetricsStateCode()
+                : IkeMetrics.IKE_STATE_UNKNOWN;
     }
 }

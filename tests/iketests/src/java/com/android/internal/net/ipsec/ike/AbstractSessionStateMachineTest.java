@@ -20,6 +20,7 @@ import static com.android.internal.net.ipsec.test.ike.AbstractSessionStateMachin
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 
 import android.os.Looper;
@@ -27,6 +28,7 @@ import android.os.Message;
 import android.os.test.TestLooper;
 
 import com.android.internal.net.ipsec.test.ike.AbstractSessionStateMachine.ExceptionHandlerBase;
+import com.android.internal.net.ipsec.test.ike.utils.IkeMetrics;
 import com.android.internal.net.ipsec.test.ike.utils.State;
 
 import org.junit.After;
@@ -37,13 +39,16 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.concurrent.Executor;
 
-public final class AbstractSessionStateMachineTest {
+public final class AbstractSessionStateMachineTest extends IkeSessionTestBase {
+    private IkeContext mIkeContext;
     private TestLooper mLooper;
     private TestSessionStateMachine mTestSm;
 
     @Before
     public void setup() throws Exception {
         mLooper = new TestLooper();
+        mIkeContext = mock(IkeContext.class);
+        doReturn(mLooper.getLooper()).when(mIkeContext).getLooper();
         mTestSm = new TestSessionStateMachine(mLooper.getLooper());
 
         mTestSm.start();
@@ -56,7 +61,7 @@ public final class AbstractSessionStateMachineTest {
         mLooper.dispatchAll();
     }
 
-    private static final class TestSessionStateMachine extends AbstractSessionStateMachine {
+    private final class TestSessionStateMachine extends AbstractSessionStateMachine {
         static final int CMD_TEST = CMD_PRIVATE_BASE + 1;
 
         final ArrayList mExecutedCmds = new ArrayList<>();
@@ -64,7 +69,10 @@ public final class AbstractSessionStateMachineTest {
         private final State mInitial = new Initial();
 
         TestSessionStateMachine(Looper looper) {
-            super("TestSessionStateMachine", looper, mock(Executor.class));
+            super(
+                    "TestSessionStateMachine",
+                    AbstractSessionStateMachineTest.this.mIkeContext,
+                    mock(Executor.class));
 
             addState(mInitial);
             setInitialState(mInitial);
@@ -95,6 +103,16 @@ public final class AbstractSessionStateMachineTest {
             protected String getCmdString(int cmd) {
                 return Integer.toString(cmd);
             }
+
+            @Override
+            protected @IkeMetrics.IkeState int getMetricsStateCode() {
+                return 0;
+            }
+        }
+
+        @Override
+        protected @IkeMetrics.IkeSessionType int getMetricsSessionType() {
+            return 0;
         }
     }
 

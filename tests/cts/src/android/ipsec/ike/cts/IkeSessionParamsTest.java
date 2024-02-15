@@ -19,7 +19,9 @@ package android.ipsec.ike.cts;
 import static android.net.ipsec.ike.IkeSessionParams.ESP_ENCAP_TYPE_UDP;
 import static android.net.ipsec.ike.IkeSessionParams.ESP_IP_VERSION_IPV6;
 import static android.net.ipsec.ike.IkeSessionParams.IKE_OPTION_ACCEPT_ANY_REMOTE_ID;
+import static android.net.ipsec.ike.IkeSessionParams.IKE_OPTION_AUTOMATIC_KEEPALIVE_ON_OFF;
 import static android.net.ipsec.ike.IkeSessionParams.IKE_OPTION_EAP_ONLY_AUTH;
+import static android.net.ipsec.ike.IkeSessionParams.IKE_OPTION_FORCE_PORT_4500;
 import static android.net.ipsec.ike.IkeSessionParams.IKE_OPTION_INITIAL_CONTACT;
 import static android.net.ipsec.ike.IkeSessionParams.IKE_OPTION_MOBIKE;
 import static android.net.ipsec.ike.IkeSessionParams.IKE_OPTION_REKEY_MOBILITY;
@@ -87,6 +89,8 @@ public final class IkeSessionParamsTest extends IkeSessionTestBase {
     private static final int DPD_DELAY_SECONDS = (int) TimeUnit.MINUTES.toSeconds(10L);
     private static final int NATT_KEEPALIVE_DELAY_SECONDS = (int) TimeUnit.MINUTES.toSeconds(5L);
     private static final int[] RETRANS_TIMEOUT_MS_LIST = new int[] {500, 500, 500, 500, 500, 500};
+    private static final int[] LIVENESS_RETRANS_TIMEOUT_MS_LIST =
+            new int[] {500, 500, 500, 500, 500, 500};
 
     private static final int DSCP = 8;
 
@@ -102,6 +106,18 @@ public final class IkeSessionParamsTest extends IkeSessionTestBase {
         EXPECTED_PCSCF_SERVERS.add(PCSCF_IPV4_ADDRESS_2);
         EXPECTED_PCSCF_SERVERS.add(PCSCF_IPV6_ADDRESS_1);
         EXPECTED_PCSCF_SERVERS.add(PCSCF_IPV6_ADDRESS_2);
+    }
+
+    private static final HashSet<Integer> EXPECTED_IKE_OPTIONS = new HashSet<>();
+
+    static {
+        EXPECTED_IKE_OPTIONS.add(IKE_OPTION_ACCEPT_ANY_REMOTE_ID);
+        EXPECTED_IKE_OPTIONS.add(IKE_OPTION_EAP_ONLY_AUTH);
+        EXPECTED_IKE_OPTIONS.add(IKE_OPTION_MOBIKE);
+        EXPECTED_IKE_OPTIONS.add(IKE_OPTION_FORCE_PORT_4500);
+        EXPECTED_IKE_OPTIONS.add(IKE_OPTION_INITIAL_CONTACT);
+        EXPECTED_IKE_OPTIONS.add(IKE_OPTION_REKEY_MOBILITY);
+        EXPECTED_IKE_OPTIONS.add(IKE_OPTION_AUTOMATIC_KEEPALIVE_ON_OFF);
     }
 
     // Arbitrary proposal and remote ID. Local ID is chosen to match the client end cert in the
@@ -302,6 +318,20 @@ public final class IkeSessionParamsTest extends IkeSessionTestBase {
     public void testAddIkeOption() throws Exception {
         verifyAddIkeOption(IKE_OPTION_ACCEPT_ANY_REMOTE_ID);
         verifyAddIkeOption(IKE_OPTION_INITIAL_CONTACT);
+    }
+
+    @Test
+    @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+    public void testAddAndGetIkeOptions() throws Exception {
+        final IkeSessionParams.Builder builder =
+                createIkeParamsBuilderMinimumWithoutAuth()
+                        .setAuthEap(mServerCaCert, EAP_ONLY_SAFE_METHODS_CONFIG);
+        for (int option : EXPECTED_IKE_OPTIONS) {
+            builder.addIkeOption(option);
+        }
+        final IkeSessionParams ikeParams = builder.build();
+
+        assertEquals(EXPECTED_IKE_OPTIONS, ikeParams.getIkeOptions());
     }
 
     private void verifyAddIkeOption(int ikeOption) {
@@ -547,5 +577,25 @@ public final class IkeSessionParamsTest extends IkeSessionTestBase {
 
         verifyIkeParamsMinimum(sessionParams);
         assertEquals(ESP_ENCAP_TYPE_UDP, sessionParams.getEncapType());
+    }
+
+    /**
+     * Test Liveness Retransmission Timeouts. Test coverage up to Android U is ignored because the
+     * Liveness APIs are not available in versions below, including SDK 34.
+     *
+     * @throws java.lang.NoSuchMethodError if sdk {@code VERSION_CODES.UPSIDE_DOWN_CAKE} or less
+     */
+    @Test
+    @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+    public void testSetLivenessRetransmissionTimeouts() throws Exception {
+        IkeSessionParams sessionParams =
+                createIkeParamsBuilderMinimum()
+                        .setLivenessRetransmissionTimeoutsMillis(LIVENESS_RETRANS_TIMEOUT_MS_LIST)
+                        .build();
+
+        verifyIkeParamsMinimum(sessionParams);
+        assertArrayEquals(
+                LIVENESS_RETRANS_TIMEOUT_MS_LIST,
+                sessionParams.getLivenessRetransmissionTimeoutsMillis());
     }
 }
