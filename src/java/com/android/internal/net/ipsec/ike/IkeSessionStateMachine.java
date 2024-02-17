@@ -5747,6 +5747,11 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         protected int[] getRetransmissionTimeoutsMillis() {
             return mIkeSessionParams.getLivenessRetransmissionTimeoutsMillis();
         }
+
+        @Override
+        protected @IkeMetrics.IkeState int getMetricsStateCode() {
+            return IkeMetrics.IKE_STATE_IKE_DPD_ON_DEMAND_LOCAL_INFO;
+        }
     }
 
     /**
