@@ -47,6 +47,7 @@ android_test {
     test_suites: [
         "cts",
         "mts-ipsec",
+        "mcts-ipsec",
         "general-tests",
     ],
 
