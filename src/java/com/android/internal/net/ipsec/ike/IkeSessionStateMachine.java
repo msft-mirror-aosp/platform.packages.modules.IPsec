@@ -1890,7 +1890,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
      * IKE packet. Idle state will defer the received packet to a BusyState to process it.
      */
     private abstract class BusyState extends LocalRequestQueuer {
-        protected Retransmitter mRetransmitter;
+        @Nullable protected Retransmitter mRetransmitter;
 
         @Override
         public boolean processStateMessage(Message message) {
