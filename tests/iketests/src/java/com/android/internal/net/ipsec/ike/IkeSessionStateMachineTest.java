@@ -1736,6 +1736,17 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
         verifyOutboundKePayload(SaProposal.DH_GROUP_2048_BIT_MODP);
         verify(mSpyIkeConnectionCtrl, atLeast(1)).tearDown();
+        verifyIkeSaMetricsLogged(
+                1,
+                IkeMetrics.IKE_CALLER_UNKNOWN,
+                IkeMetrics.IKE_SESSION_TYPE_IKE,
+                IkeMetrics.IKE_STATE_IKE_CREATE_LOCAL_IKE_INIT,
+                SaProposal.DH_GROUP_2048_BIT_MODP,
+                IkeMetrics.ENCRYPTION_ALGORITHM_UNSPECIFIED,
+                IkeMetrics.KEY_LEN_UNSPECIFIED,
+                IkeMetrics.INTEGRITY_ALGORITHM_NONE,
+                IkeMetrics.PSEUDORANDOM_FUNCTION_UNSPECIFIED,
+                IkeMetrics.IKE_ERROR_PROTOCOL_INVALID_KE_PAYLOAD);
     }
 
     private ReceivedIkePacket getIkeInitRespWithCookie() throws Exception {
@@ -1953,6 +1964,17 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                 IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, dummyReceivedIkePacket);
         mLooper.dispatchAll();
         verifyIncrementLocaReqMsgId();
+        verifyIkeSaMetricsLogged(
+                1,
+                IkeMetrics.IKE_CALLER_UNKNOWN,
+                IkeMetrics.IKE_SESSION_TYPE_IKE,
+                IkeMetrics.IKE_STATE_IKE_CREATE_LOCAL_IKE_INIT,
+                SaProposal.DH_GROUP_1024_BIT_MODP,
+                IkeMetrics.ENCRYPTION_ALGORITHM_AES_CBC,
+                IkeMetrics.KEY_LEN_AES_128,
+                IkeMetrics.INTEGRITY_ALGORITHM_HMAC_SHA1_96,
+                IkeMetrics.PSEUDORANDOM_FUNCTION_HMAC_SHA1,
+                IkeMetrics.IKE_ERROR_NONE);
         return dummyReceivedIkePacket;
     }
 
@@ -4037,6 +4059,17 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         assertEquals(mSpyLocalInitIkeSaRecord, mIkeSessionStateMachine.mLocalInitNewIkeSaRecord);
         verify(mSpyIkeConnectionCtrl.getIkeSocket())
                 .registerIke(eq(mSpyLocalInitIkeSaRecord.getLocalSpi()), eq(mSpyIkeConnectionCtrl));
+        verifyIkeSaMetricsLogged(
+                1,
+                IkeMetrics.IKE_CALLER_UNKNOWN,
+                IkeMetrics.IKE_SESSION_TYPE_IKE,
+                IkeMetrics.IKE_STATE_IKE_REKEY_LOCAL_CREATE,
+                SaProposal.DH_GROUP_1024_BIT_MODP,
+                IkeMetrics.ENCRYPTION_ALGORITHM_AES_CBC,
+                IkeMetrics.KEY_LEN_AES_128,
+                IkeMetrics.INTEGRITY_ALGORITHM_HMAC_SHA1_96,
+                IkeMetrics.PSEUDORANDOM_FUNCTION_HMAC_SHA1,
+                IkeMetrics.IKE_ERROR_NONE);
     }
 
     @Test
@@ -4453,6 +4486,19 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         verify(mMockCurrentIkeSocket)
                 .registerIke(
                         eq(mSpyRemoteInitIkeSaRecord.getLocalSpi()), eq(mSpyIkeConnectionCtrl));
+
+        // IKE_STATE_IKE_RECEIVING for remote rekey
+        verifyIkeSaMetricsLogged(
+                1,
+                IkeMetrics.IKE_CALLER_UNKNOWN,
+                IkeMetrics.IKE_SESSION_TYPE_IKE,
+                IkeMetrics.IKE_STATE_IKE_RECEIVING,
+                SaProposal.DH_GROUP_1024_BIT_MODP,
+                IkeMetrics.ENCRYPTION_ALGORITHM_AES_CBC,
+                IkeMetrics.KEY_LEN_AES_128,
+                IkeMetrics.INTEGRITY_ALGORITHM_HMAC_SHA1_96,
+                IkeMetrics.PSEUDORANDOM_FUNCTION_HMAC_SHA1,
+                IkeMetrics.IKE_ERROR_NONE);
     }
 
     @Ignore
