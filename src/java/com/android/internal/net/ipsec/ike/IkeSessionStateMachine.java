@@ -1391,37 +1391,36 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             }
 
             int dpdDelaySeconds = mIkeSessionParams.getDpdDelaySeconds();
-            if (dpdDelaySeconds == IkeSessionParams.IKE_DPD_DELAY_SEC_DISABLED) {
-                return;
+            if (dpdDelaySeconds != IkeSessionParams.IKE_DPD_DELAY_SEC_DISABLED) {
+                long dpdDelayMs = TimeUnit.SECONDS.toMillis(dpdDelaySeconds);
+                long remoteIkeSpi = mCurrentIkeSaRecord.getRemoteSpi();
+                Message intentIkeMsg = getIntentIkeSmMsg(CMD_LOCAL_REQUEST_DPD, remoteIkeSpi);
+                PendingIntent dpdIntent =
+                        IkeAlarm.buildIkeAlarmIntent(
+                                mIkeContext.getContext(),
+                                ACTION_DPD,
+                                getIntentIdentifier(mIkeSessionId, remoteIkeSpi),
+                                intentIkeMsg);
+
+                // Initiating DPD is a way to detect the aliveness of the remote server and also a
+                // way to assert the aliveness of IKE library. Considering this, the alarm to
+                // trigger DPD needs to go off even when device is in doze mode to decrease the
+                // chance the remote server thinks IKE library is dead. Also, since DPD initiation
+                // is time-critical, we need to use "setExact" to avoid the batching alarm delay
+                // which can be at most 75% for the alarm timeout
+                // (@see AlarmManagerService#maxTriggerTime).
+                // Please check AlarmManager#setExactAndAllowWhileIdle for more details.
+                mDpdAlarm =
+                        mDeps.newExactAndAllowWhileIdleAlarm(
+                                new IkeAlarmConfig(
+                                        mIkeContext.getContext(),
+                                        ACTION_DPD,
+                                        dpdDelayMs,
+                                        dpdIntent,
+                                        intentIkeMsg));
+                mDpdAlarm.schedule();
+                logd("DPD Alarm scheduled with DPD delay: " + dpdDelayMs + "ms");
             }
-
-            long dpdDelayMs = TimeUnit.SECONDS.toMillis(dpdDelaySeconds);
-            long remoteIkeSpi = mCurrentIkeSaRecord.getRemoteSpi();
-            Message intentIkeMsg = getIntentIkeSmMsg(CMD_LOCAL_REQUEST_DPD, remoteIkeSpi);
-            PendingIntent dpdIntent =
-                    IkeAlarm.buildIkeAlarmIntent(
-                            mIkeContext.getContext(),
-                            ACTION_DPD,
-                            getIntentIdentifier(mIkeSessionId, remoteIkeSpi),
-                            intentIkeMsg);
-
-            // Initiating DPD is a way to detect the aliveness of the remote server and also a
-            // way to assert the aliveness of IKE library. Considering this, the alarm to
-            // trigger DPD needs to go off even when device is in doze mode to decrease the chance
-            // the remote server thinks IKE library is dead. Also, since DPD initiation is
-            // time-critical, we need to use "setExact" to avoid the batching alarm delay which
-            // can be at most 75% for the alarm timeout (@see AlarmManagerService#maxTriggerTime).
-            // Please check AlarmManager#setExactAndAllowWhileIdle for more details.
-            mDpdAlarm =
-                    mDeps.newExactAndAllowWhileIdleAlarm(
-                            new IkeAlarmConfig(
-                                    mIkeContext.getContext(),
-                                    ACTION_DPD,
-                                    dpdDelayMs,
-                                    dpdIntent,
-                                    intentIkeMsg));
-            mDpdAlarm.schedule();
-            logd("DPD Alarm scheduled with DPD delay: " + dpdDelayMs + "ms");
         }
 
         @Override
