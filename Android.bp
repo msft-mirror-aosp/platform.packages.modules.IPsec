@@ -60,6 +60,10 @@ java_sdk_library {
         "com.android.internal.net",
     ],
 
+    aconfig_declarations: [
+        "ipsec_aconfig_flags",
+    ],
+
     lint: {
         baseline_filename: "lint-baseline.xml",
     },
