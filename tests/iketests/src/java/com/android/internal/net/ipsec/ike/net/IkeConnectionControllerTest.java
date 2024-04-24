@@ -38,6 +38,7 @@ import static com.android.internal.net.ipsec.test.ike.net.IkeConnectionControlle
 import static com.android.internal.net.ipsec.test.ike.net.IkeConnectionController.NAT_TRAVERSAL_UNSUPPORTED;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
@@ -96,6 +97,8 @@ import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 
 import java.io.IOException;
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.net.Inet4Address;
 import java.net.Inet6Address;
 import java.net.InetAddress;
@@ -1633,5 +1636,20 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
     @Test
     public void testOnUnderlyingNetworkUpdatedWithNat64V6Address() throws Exception {
         verifyDnsLookupWithCachedIpv6Address(true /* isNat64 */, true /* dnsExpected */);
+    }
+
+    @Test
+    @IgnoreUpTo(VERSION_CODES.UPSIDE_DOWN_CAKE)
+    public void testDump() throws Exception {
+        mIkeConnectionCtrl.tearDown();
+        // Clear the network callback registration call in #setUp()
+        resetMockConnectManager();
+
+        setupRemoteAddressForNetwork(mMockDefaultNetwork, new InetAddress[0]);
+        mIkeConnectionCtrl = buildIkeConnectionCtrl();
+
+        final StringWriter stringWriter = new StringWriter();
+        mIkeConnectionCtrl.dump(new PrintWriter(stringWriter), "");
+        assertFalse(stringWriter.toString().isEmpty());
     }
 }

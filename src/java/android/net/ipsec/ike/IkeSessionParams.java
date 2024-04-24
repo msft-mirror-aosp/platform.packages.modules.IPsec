@@ -2368,9 +2368,13 @@ public final class IkeSessionParams {
      * Dumps the state of {@link IkeSessionParams}
      *
      * @param pw {@link PrintWriter} to write the state of the object.
+     * @param prefix prefix for indentation
      * @hide
      */
     public void dump(PrintWriter pw, String prefix) {
+        // Please make sure that the dump is thread-safe
+        // so the client won't get a crash or exception when adding codes to the dump.
+
         pw.println("------------------------------");
         pw.println("IkeSessionParams:");
         pw.println(prefix + "Caller configured network: " + mCallerConfiguredNetwork);

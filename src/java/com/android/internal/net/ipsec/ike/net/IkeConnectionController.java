@@ -1275,8 +1275,12 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
      * Dumps the state of {@link IkeConnectionController}
      *
      * @param pw {@link PrintWriter} to write the state of the object.
+     * @param prefix prefix for indentation
      */
     public void dump(PrintWriter pw, String prefix) {
+        // Please make sure that the dump is thread-safe
+        // so the client won't get a crash or exception when adding codes to the dump.
+
         pw.println("------------------------------");
         pw.println("IkeConnectionController:");
         pw.println(prefix + "Network: " + mNetwork);
@@ -1284,14 +1288,37 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
         pw.println(prefix + "Local address: " + mLocalAddress);
         pw.println(prefix + "Remote(Server) address: " + mRemoteAddress);
         pw.println(prefix + "Mobility status: " + mMobilityEnabled);
-        pw.println(prefix + "Local port: " + getLocalPort());
-        pw.println(prefix + "Remote(server) port: " + getRemotePort());
+        printPortInfo(pw, prefix);
         pw.println(
                 prefix + "Esp ip version: " + IkeSessionParams.IP_VERSION_TO_STR.get(mIpVersion));
         pw.println(
                 prefix + "Esp encap type: " + IkeSessionParams.ENCAP_TYPE_TO_STR.get(mEncapType));
         pw.println("------------------------------");
         pw.println();
+    }
+
+    /**
+     * Port information may sometimes cause exceptions such as NPE or RTE, Dumps ports including the
+     * exception.
+     *
+     * @param pw {@link PrintWriter} to write the state of the object.
+     * @param prefix prefix for indentation
+     */
+    private void printPortInfo(PrintWriter pw, String prefix) {
+        // Make it thread-safe. Since this method may be accessed simultaneously from
+        // multiple threads, The socket is assigned locally and then printed.
+        IkeSocket socket = mIkeSocket;
+        if (socket == null) {
+            pw.println(prefix + "Local port: null socket");
+            pw.println(prefix + "Remote(server) port: null socket");
+        } else {
+            try {
+                pw.println(prefix + "Local port: " + socket.getLocalPort());
+            } catch (ErrnoException e) {
+                pw.println(prefix + "Local port: failed to get port");
+            }
+            pw.println(prefix + "Remote(server) port: " + socket.getIkeServerPort());
+        }
     }
 
     @Override
