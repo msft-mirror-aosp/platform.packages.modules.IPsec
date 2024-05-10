@@ -39,7 +39,6 @@ import android.net.ipsec.ike.IkeSessionParams;
 
 import com.android.internal.net.ipsec.ike.shim.ShimUtils;
 
-import java.io.IOException;
 import java.net.Inet4Address;
 import java.util.concurrent.Executors;
 
@@ -50,6 +49,7 @@ public class HardwareKeepaliveImpl implements IkeNattKeepalive.NattKeepalive {
     private final int mKeepaliveDelaySeconds;
     private final SocketKeepalive mSocketKeepalive;
     private final HardwareKeepaliveCallback mHardwareKeepaliveCb;
+
     /***
      * The NATT keepalive start options.
      *
@@ -70,8 +70,7 @@ public class HardwareKeepaliveImpl implements IkeNattKeepalive.NattKeepalive {
             UdpEncapsulationSocket socket,
             Network network,
             Network underpinnedNetwork,
-            HardwareKeepaliveCallback hardwareKeepaliveCb)
-            throws IOException {
+            HardwareKeepaliveCallback hardwareKeepaliveCb) {
         // Setup for hardware offload keepalive. Fail to create mSocketKeepalive will cause
         // MySocketKeepaliveCb#onError to be fired
         mKeepaliveDelaySeconds = keepaliveDelaySeconds;
@@ -123,6 +122,9 @@ public class HardwareKeepaliveImpl implements IkeNattKeepalive.NattKeepalive {
          * packet to fail
          */
         void onNetworkError();
+
+        /** Called when the keepalive has stopped */
+        void onStopped(HardwareKeepaliveImpl hardwareKeepalive);
     }
 
     class MySocketKeepaliveCb extends SocketKeepalive.Callback {
@@ -149,6 +151,11 @@ public class HardwareKeepaliveImpl implements IkeNattKeepalive.NattKeepalive {
                 default:
                     mHardwareKeepaliveCb.onNetworkError();
             }
+        }
+
+        @Override
+        public void onStopped() {
+            mHardwareKeepaliveCb.onStopped(HardwareKeepaliveImpl.this);
         }
     }
 }

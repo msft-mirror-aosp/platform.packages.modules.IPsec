@@ -27,10 +27,13 @@ import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_T
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 
 import android.net.LinkAddress;
+import android.net.ipsec.ike.ChildSessionConfiguration;
 import android.net.ipsec.ike.IkeSaProposal;
 import android.net.ipsec.ike.IkeSession;
+import android.net.ipsec.ike.IkeSessionConnectionInfo;
 import android.net.ipsec.ike.IkeSessionParams;
 import android.net.ipsec.ike.exceptions.IkeProtocolException;
 import android.platform.test.annotations.AppModeFull;
@@ -38,9 +41,13 @@ import android.platform.test.annotations.AppModeFull;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.filters.SdkSuppress;
 
+import com.android.modules.utils.build.SdkLevel;
+
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -103,12 +110,13 @@ public class IkeSessionPskTest extends IkeSessionPskTestBase {
         // IKE INIT and IKE AUTH takes two exchanges. Message ID starts from 2
         int expectedMsgId = 2;
 
-        verifyIkeSessionSetupBlocking();
-        verifyChildSessionSetupBlocking(
-                mFirstChildSessionCallback,
-                Arrays.asList(TUNNEL_MODE_INBOUND_TS),
-                Arrays.asList(TUNNEL_MODE_OUTBOUND_TS),
-                Arrays.asList(EXPECTED_INTERNAL_LINK_ADDR));
+        final IkeSessionConnectionInfo connectionInfo = verifyIkeSessionSetupBlocking();
+        final ChildSessionConfiguration childConf =
+                verifyChildSessionSetupBlocking(
+                        mFirstChildSessionCallback,
+                        Arrays.asList(TUNNEL_MODE_INBOUND_TS),
+                        Arrays.asList(TUNNEL_MODE_OUTBOUND_TS),
+                        Arrays.asList(EXPECTED_INTERNAL_LINK_ADDR));
 
         IpSecTransformCallRecord firstTransformRecordA =
                 mFirstChildSessionCallback.awaitNextCreatedIpSecTransform();
@@ -116,43 +124,54 @@ public class IkeSessionPskTest extends IkeSessionPskTestBase {
                 mFirstChildSessionCallback.awaitNextCreatedIpSecTransform();
         verifyCreateIpSecTransformPair(firstTransformRecordA, firstTransformRecordB);
 
-        // Open additional Child Session
-        TestChildSessionCallback additionalChildCb = new DefaultTestChildSessionCallback();
-        ikeSession.openChildSession(buildTunnelModeChildSessionParams(), additionalChildCb);
-        mTunNetworkContext.tunUtils.awaitReqAndInjectResp(
-                IKE_DETERMINISTIC_INITIATOR_SPI,
-                expectedMsgId++,
-                true /* expectedUseEncap */,
-                SUCCESS_CREATE_CHILD_RESP);
+        try (TunIpSecNetworkWrapper ipsecNetworkWrapper =
+                new TunIpSecNetworkWrapper(
+                        connectionInfo,
+                        childConf,
+                        firstTransformRecordA.ipSecTransform,
+                        firstTransformRecordB.ipSecTransform)) {
+            ikeSession.setUnderpinnedNetwork(ipsecNetworkWrapper.ipSecNetwork);
 
-        // Verify opening additional Child Session
-        verifyChildSessionSetupBlocking(
-                additionalChildCb,
-                Arrays.asList(TUNNEL_MODE_INBOUND_TS),
-                Arrays.asList(TUNNEL_MODE_OUTBOUND_TS),
-                new ArrayList<LinkAddress>());
-        IpSecTransformCallRecord additionalTransformRecordA =
-                additionalChildCb.awaitNextCreatedIpSecTransform();
-        IpSecTransformCallRecord additionalTransformRecordB =
-                additionalChildCb.awaitNextCreatedIpSecTransform();
-        verifyCreateIpSecTransformPair(additionalTransformRecordA, additionalTransformRecordB);
+            // Open additional Child Session
+            TestChildSessionCallback additionalChildCb = new DefaultTestChildSessionCallback();
+            ikeSession.openChildSession(buildTunnelModeChildSessionParams(), additionalChildCb);
+            mTunNetworkContext.tunUtils.awaitReqAndInjectResp(
+                    IKE_DETERMINISTIC_INITIATOR_SPI,
+                    expectedMsgId++,
+                    true /* expectedUseEncap */,
+                    SUCCESS_CREATE_CHILD_RESP);
 
-        // Close additional Child Session
-        ikeSession.closeChildSession(additionalChildCb);
-        mTunNetworkContext.tunUtils.awaitReqAndInjectResp(
-                IKE_DETERMINISTIC_INITIATOR_SPI,
-                expectedMsgId++,
-                true /* expectedUseEncap */,
-                SUCCESS_DELETE_CHILD_RESP);
+            // Verify opening additional Child Session
+            verifyChildSessionSetupBlocking(
+                    additionalChildCb,
+                    Arrays.asList(TUNNEL_MODE_INBOUND_TS),
+                    Arrays.asList(TUNNEL_MODE_OUTBOUND_TS),
+                    new ArrayList<LinkAddress>());
+            IpSecTransformCallRecord additionalTransformRecordA =
+                    additionalChildCb.awaitNextCreatedIpSecTransform();
+            IpSecTransformCallRecord additionalTransformRecordB =
+                    additionalChildCb.awaitNextCreatedIpSecTransform();
+            verifyCreateIpSecTransformPair(additionalTransformRecordA, additionalTransformRecordB);
 
-        verifyDeleteIpSecTransformPair(
-                additionalChildCb, additionalTransformRecordA, additionalTransformRecordB);
-        additionalChildCb.awaitOnClosed();
+            // Close additional Child Session
+            ikeSession.closeChildSession(additionalChildCb);
+            mTunNetworkContext.tunUtils.awaitReqAndInjectResp(
+                    IKE_DETERMINISTIC_INITIATOR_SPI,
+                    expectedMsgId++,
+                    true /* expectedUseEncap */,
+                    SUCCESS_DELETE_CHILD_RESP);
 
-        // Close IKE Session
-        ikeSession.close();
-        performCloseIkeBlocking(expectedMsgId++, SUCCESS_DELETE_IKE_RESP);
-        verifyCloseIkeAndChildBlocking(firstTransformRecordA, firstTransformRecordB);
+            verifyDeleteIpSecTransformPair(
+                    additionalChildCb, additionalTransformRecordA, additionalTransformRecordB);
+            additionalChildCb.awaitOnClosed();
+
+            verifyDumpIkeSessionInfo(ikeSession);
+
+            // Close IKE Session
+            ikeSession.close();
+            performCloseIkeBlocking(expectedMsgId++, SUCCESS_DELETE_IKE_RESP);
+            verifyCloseIkeAndChildBlocking(firstTransformRecordA, firstTransformRecordB);
+        }
     }
 
     @Test
@@ -222,6 +241,8 @@ public class IkeSessionPskTest extends IkeSessionPskTestBase {
         final IpSecTransformCallRecord firstTransformRecordB =
                 mFirstChildSessionCallback.awaitNextCreatedIpSecTransform();
         verifyCreateIpSecTransformPair(firstTransformRecordA, firstTransformRecordB);
+
+        verifyDumpIkeSessionInfo(ikeSession);
 
         // Close IKE Session
         ikeSession.close();
@@ -293,6 +314,8 @@ public class IkeSessionPskTest extends IkeSessionPskTestBase {
         IpSecTransformCallRecord firstTransformRecordB =
                 mFirstChildSessionCallback.awaitNextCreatedIpSecTransform();
         verifyCreateIpSecTransformPair(firstTransformRecordA, firstTransformRecordB);
+
+        verifyDumpIkeSessionInfo(ikeSession);
 
         // Close IKE Session
         ikeSession.close();
@@ -413,6 +436,8 @@ public class IkeSessionPskTest extends IkeSessionPskTestBase {
         assertEquals(ERROR_TYPE_TS_UNACCEPTABLE, protocolException.getErrorType());
         assertArrayEquals(EXPECTED_PROTOCOL_ERROR_DATA_NONE, protocolException.getErrorData());
 
+        verifyDumpIkeSessionInfo(ikeSession);
+
         ikeSession.kill();
         mIkeSessionCallback.awaitOnClosed();
     }
@@ -427,5 +452,13 @@ public class IkeSessionPskTest extends IkeSessionPskTestBase {
         mIkeSessionCallback = new LegacyTestIkeSessionCallback();
         mFirstChildSessionCallback = new LegacyTestChildSessionCallback();
         verifyIkeAuthHandlesFirstChildCreationFail();
+    }
+
+    private void verifyDumpIkeSessionInfo(IkeSession ikeSession) {
+        if (SdkLevel.isAtLeastV()) {
+            final StringWriter stringWriter = new StringWriter();
+            ikeSession.dump(new PrintWriter(stringWriter));
+            assertFalse(stringWriter.toString().isEmpty());
+        }
     }
 }
