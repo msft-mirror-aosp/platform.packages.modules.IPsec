@@ -1890,7 +1890,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
      * IKE packet. Idle state will defer the received packet to a BusyState to process it.
      */
     private abstract class BusyState extends LocalRequestQueuer {
-        protected Retransmitter mRetransmitter;
+        @Nullable protected Retransmitter mRetransmitter;
 
         @Override
         public boolean processStateMessage(Message message) {
@@ -6015,16 +6015,18 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
      */
     public void dump(PrintWriter pw) {
         super.dump(new FileDescriptor(), pw, new String[0]);
+        // Please make sure that the dump is thread-safe
+        // so the client won't get a crash or exception when adding codes to the dump.
 
         // TODO(b/310058405): To use IndentingPrintWriter Utility Class for Indentation purpose
         String prefix = "    ";
 
-        // dump ike session params data
+        // Dump ike session params data.
         if (mIkeSessionParams != null) {
             mIkeSessionParams.dump(pw, prefix);
         }
 
-        // dump ike connection controller data
+        // Dump ike connection controller data.
         if (mIkeConnectionCtrl != null) {
             mIkeConnectionCtrl.dump(pw, prefix);
         }
