@@ -28,10 +28,12 @@ import static android.net.ipsec.ike.IkeSessionParams.IKE_NATT_KEEPALIVE_DELAY_SE
 import static android.net.ipsec.ike.IkeSessionParams.IKE_NATT_KEEPALIVE_DELAY_SEC_MIN;
 import static android.net.ipsec.ike.IkeSessionParams.IKE_OPTION_AUTOMATIC_ADDRESS_FAMILY_SELECTION;
 import static android.net.ipsec.ike.IkeSessionParams.IKE_OPTION_AUTOMATIC_NATT_KEEPALIVES;
+import static android.net.ipsec.ike.IkeSessionParams.IKE_OPTION_FORCE_DNS_RESOLUTION;
 import static android.net.ipsec.ike.IkeSessionParams.IKE_OPTION_FORCE_PORT_4500;
 import static android.net.ipsec.ike.exceptions.IkeException.wrapAsIkeException;
 
 import static com.android.internal.net.ipsec.ike.IkeContext.CONFIG_AUTO_NATT_KEEPALIVES_CELLULAR_TIMEOUT_OVERRIDE_SECONDS;
+import static com.android.internal.net.ipsec.ike.IkeContext.CONFIG_USE_CACHED_ADDRS;
 import static com.android.internal.net.ipsec.ike.utils.IkeAlarm.IkeAlarmConfig;
 import static com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver.ACTION_KEEPALIVE;
 
@@ -1142,30 +1144,29 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
     /**
      * Return whether DNS lookup is required during mobility update
      *
-     * <p>Require DNS lookup when one of the following condition is true:
+     * <p>DNS lookup will be skipped when IKE_OPTION_FORCE_DNS_RESOLUTION is disabled and one of the
+     * following condition is true:
      *
      * <ul>
-     *   <li>The network has changed
-     *   <li>The locally supported versions misaligned with the cached remotely supported versions
-     *   <li>Neither of the two versions are supported locally or remotely
+     *   <li>The cached remote addresses include both IPv4 and IPv6 addresses
+     *   <li>The locally supported IP families and cached remote addresses match. In other words, if
+     *       local addresses include both IP versions and the cached remote addresses only have one
+     *       IP family, DNS lookup is required. This might happen when it takes longer for the
+     *       device to provide 464xlat IPv4 and thus the cached addresses do not have it. However,
+     *       if the local addresses only support IPv4, but the cached remote addresses have global
+     *       IPv4 and IPv6 addresses, DNS lookup can be skipped.
      * </ul>
      */
     @VisibleForTesting
     public boolean isDnsLookupRequiredWithGlobalRemoteAddress(
             Network oldNetwork, Network network, LinkProperties linkProperties) {
-        // If the network changes, perform a new DNS lookup to ensure that the correct remote
-        // address is used. This ensures that DNS returns addresses for the correct address families
-        // (important if using a v4/v6-only network). This also ensures that DNS64 is handled
-        // correctly when switching between networks that may have different IPv6 prefixes.
-        if (!network.equals(oldNetwork)) {
-            return true;
-        }
-
         final Set<Integer> localIpVersions =
                 getSupportedVersions(
                         hasLocalIpV4Address(linkProperties), linkProperties.hasGlobalIpv6Address());
         final Set<Integer> remoteIpVersionsCached =
-                getSupportedVersions(!mRemoteAddressesV4.isEmpty(), !mRemoteAddressesV6.isEmpty());
+                getSupportedVersions(
+                        !mRemoteAddressesV4.isEmpty(),
+                        !mRemoteAddressesV6.isEmpty() /* NAT64 not included */);
 
         getIkeLog()
                 .d(
@@ -1175,9 +1176,30 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
                                 + " remoteIpVersionsCached "
                                 + remoteIpVersionsCached);
 
-        if (Objects.equals(localIpVersions, remoteIpVersionsCached) && !localIpVersions.isEmpty()) {
+        // Programming error
+        if (localIpVersions.isEmpty()) {
+            getIkeLog()
+                    .wtf(
+                            TAG,
+                            "isDnsLookupRequiredWithGlobalRemoteAddress no local address on the"
+                                    + " Network");
+            return true;
+        }
+
+        if (mIkeParams.hasIkeOption(IKE_OPTION_FORCE_DNS_RESOLUTION)) {
+            return true;
+        }
+
+        if (network.equals(oldNetwork) && Objects.equals(localIpVersions, remoteIpVersionsCached)) {
             return false;
         }
+
+        if (mIkeContext.getDeviceConfigPropertyBoolean(
+                        CONFIG_USE_CACHED_ADDRS, false /* defaultValue */)
+                && remoteIpVersionsCached.containsAll(localIpVersions)) {
+            return false;
+        }
+
         return true;
     }
 
@@ -1202,6 +1224,16 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
 
         mNetwork = network;
         mNc = networkCapabilities;
+
+        // If there is no local address on the Network, report a fatal error and return
+        if (!hasLocalIpV4Address(linkProperties) && !linkProperties.hasGlobalIpv6Address()) {
+            mCallback.onError(
+                    wrapAsIkeException(
+                            ShimUtils.getInstance()
+                                    .getDnsFailedException(
+                                            "No local address on the Network " + mNetwork)));
+            return;
+        }
 
         // Remove all NAT64 addresses since they might be out-of-date
         for (Ipv6AddrInfo info : mRemoteAddressesV6) {
