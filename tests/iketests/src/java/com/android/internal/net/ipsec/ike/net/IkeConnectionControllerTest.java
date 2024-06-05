@@ -29,9 +29,11 @@ import static android.net.ipsec.test.ike.IkeSessionParams.IKE_NATT_KEEPALIVE_DEL
 import static android.net.ipsec.test.ike.IkeSessionParams.IKE_NATT_KEEPALIVE_DELAY_SEC_MIN;
 import static android.net.ipsec.test.ike.IkeSessionParams.IKE_OPTION_AUTOMATIC_ADDRESS_FAMILY_SELECTION;
 import static android.net.ipsec.test.ike.IkeSessionParams.IKE_OPTION_AUTOMATIC_NATT_KEEPALIVES;
+import static android.net.ipsec.test.ike.IkeSessionParams.IKE_OPTION_FORCE_DNS_RESOLUTION;
 import static android.net.ipsec.test.ike.IkeSessionParams.IKE_OPTION_FORCE_PORT_4500;
 
 import static com.android.internal.net.ipsec.test.ike.IkeContext.CONFIG_AUTO_NATT_KEEPALIVES_CELLULAR_TIMEOUT_OVERRIDE_SECONDS;
+import static com.android.internal.net.ipsec.test.ike.IkeContext.CONFIG_USE_CACHED_ADDRS;
 import static com.android.internal.net.ipsec.test.ike.net.IkeConnectionController.AUTO_KEEPALIVE_DELAY_SEC_CELL;
 import static com.android.internal.net.ipsec.test.ike.net.IkeConnectionController.AUTO_KEEPALIVE_DELAY_SEC_WIFI;
 import static com.android.internal.net.ipsec.test.ike.net.IkeConnectionController.NAT_TRAVERSAL_SUPPORT_NOT_CHECKED;
@@ -44,7 +46,11 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.anyString;
 import static org.mockito.Mockito.atLeastOnce;
@@ -54,6 +60,7 @@ import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -85,6 +92,7 @@ import com.android.internal.net.ipsec.test.ike.SaRecord.IkeSaRecord;
 import com.android.internal.net.ipsec.test.ike.keepalive.IkeNattKeepalive;
 import com.android.internal.net.ipsec.test.ike.utils.IkeAlarm.IkeAlarmConfig;
 import com.android.internal.net.ipsec.test.ike.utils.RandomnessFactory;
+import com.android.internal.net.utils.test.Log;
 import com.android.modules.utils.build.SdkLevel;
 import com.android.testutils.DevSdkIgnoreRule;
 import com.android.testutils.DevSdkIgnoreRule.IgnoreAfter;
@@ -153,6 +161,10 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
         when(mMockConnectionCtrlDeps.newIkeUdp6WithEncapPortSocket(any(), any(), any()))
                 .thenReturn(mMockIkeUdp6WithEncapPortSocket);
 
+        doReturn(true)
+                .when(mIkeContext)
+                .getDeviceConfigPropertyBoolean(eq(CONFIG_USE_CACHED_ADDRS), anyBoolean());
+
         return new IkeConnectionController(
                 mIkeContext,
                 new IkeConnectionController.Config(
@@ -177,7 +189,7 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
     public void setUp() throws Exception {
         super.setUp();
         mIkeContext =
-                new IkeContext(mock(Looper.class), mSpyContext, mock(RandomnessFactory.class));
+                spy(new IkeContext(mock(Looper.class), mSpyContext, mock(RandomnessFactory.class)));
         mMockIkeParams = mock(IkeSessionParams.class);
         mMockAlarmConfig = mock(IkeAlarmConfig.class);
         mMockIkeNattKeepalive = mock(IkeNattKeepalive.class);
@@ -208,6 +220,7 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
         when(mMockIkeParams.hasIkeOption(eq(IKE_OPTION_FORCE_PORT_4500))).thenReturn(false);
         when(mMockIkeParams.hasIkeOption(eq(IKE_OPTION_AUTOMATIC_ADDRESS_FAMILY_SELECTION)))
                 .thenReturn(false);
+        when(mMockIkeParams.hasIkeOption(eq(IKE_OPTION_FORCE_DNS_RESOLUTION))).thenReturn(false);
         when(mMockIkeParams.getServerHostname()).thenReturn(REMOTE_HOSTNAME);
         when(mMockIkeParams.getConfiguredNetwork()).thenReturn(null);
         when(mMockIkeParams.getIpVersion()).thenReturn(ESP_IP_VERSION_AUTO);
@@ -1276,8 +1289,14 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
                 new IllegalStateException("testCatchUnexpectedExceptionInNetworkUpdate");
         doThrow(testException).when(mockNetwork).getAllByName(anyString());
 
+        // Ensure there is a local address otherwise the method will return without hitting
+        // #getAllByName
+        setupLocalAddressForNetwork(mockNetwork, LOCAL_ADDRESS_V6);
+
         mIkeConnectionCtrl.onUnderlyingNetworkUpdated(
-                mockNetwork, mock(LinkProperties.class), mock(NetworkCapabilities.class));
+                mockNetwork,
+                mMockConnectManager.getLinkProperties(mockNetwork),
+                mock(NetworkCapabilities.class));
 
         ArgumentCaptor<IkeInternalException> captor =
                 ArgumentCaptor.forClass(IkeInternalException.class);
@@ -1296,9 +1315,15 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
         Exception testException = new IllegalStateException("testThrowNetworkUpdate");
         doThrow(testException).when(mockNetwork).getAllByName(anyString());
 
+        // Ensure there is a local address otherwise the method will return without hitting
+        // #getAllByName
+        setupLocalAddressForNetwork(mockNetwork, LOCAL_ADDRESS_V6);
+
         try {
             mIkeConnectionCtrl.onUnderlyingNetworkUpdated(
-                    mockNetwork, mock(LinkProperties.class), mock(NetworkCapabilities.class));
+                    mockNetwork,
+                    mMockConnectManager.getLinkProperties(mockNetwork),
+                    mock(NetworkCapabilities.class));
             fail("Expected to throw IllegalStateException");
         } catch (IllegalStateException expected) {
         }
@@ -1496,14 +1521,53 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
     }
 
     @Test
-    public void testIsDnsLookupRequired_NetworkChange() throws Exception {
+    public void testIsDnsLookupRequired_NetworkChange_LocalRemoteMatch_FlagOff() throws Exception {
+        doReturn(false)
+                .when(mIkeContext)
+                .getDeviceConfigPropertyBoolean(eq(CONFIG_USE_CACHED_ADDRS), anyBoolean());
         verifyIsDnsLookupRequired(
                 true /* isNetworkChanged */,
                 true /* hasLocalV4 */,
+                false /* hasLocalV6 */,
+                true /* hasRemoteV4Cached */,
+                false /* hasRemoteV6Cached */,
+                true /* dnsExpected */);
+    }
+
+    @Test
+    public void testIsDnsLookupRequired_NetworkChange_LocalRemoteMatch_FlagOn() throws Exception {
+        verifyIsDnsLookupRequired(
+                true /* isNetworkChanged */,
+                true /* hasLocalV4 */,
+                false /* hasLocalV6 */,
+                true /* hasRemoteV4Cached */,
+                false /* hasRemoteV6Cached */,
+                false /* dnsExpected */);
+    }
+
+    @Test
+    public void testIsDnsLookupRequired_NetworkChange_RemoteV4V6_FlagOff() throws Exception {
+        doReturn(false)
+                .when(mIkeContext)
+                .getDeviceConfigPropertyBoolean(eq(CONFIG_USE_CACHED_ADDRS), anyBoolean());
+        verifyIsDnsLookupRequired(
+                true /* isNetworkChanged */,
+                false /* hasLocalV4 */,
                 true /* hasLocalV6 */,
                 true /* hasRemoteV4Cached */,
                 true /* hasRemoteV6Cached */,
                 true /* dnsExpected */);
+    }
+
+    @Test
+    public void testIsDnsLookupRequired_NetworkChange_RemoteV4V6_FlagOn() throws Exception {
+        verifyIsDnsLookupRequired(
+                true /* isNetworkChanged */,
+                false /* hasLocalV4 */,
+                true /* hasLocalV6 */,
+                true /* hasRemoteV4Cached */,
+                true /* hasRemoteV6Cached */,
+                false /* dnsExpected */);
     }
 
     @Test
@@ -1548,12 +1612,17 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
 
     @Test
     public void testIsDnsLookupRequired_LocalNone_RemoteV4() throws Exception {
+        final Log spyIkeLog = TestUtils.makeSpyLogDoLogErrorForWtf("Test");
+        IkeManager.setIkeLog(spyIkeLog);
+
         verifyIsDnsLookupRequired(
                 false /* hasLocalV4 */,
                 false /* hasLocalV6 */,
                 true /* hasRemoteV4Cached */,
                 false /* hasRemoteV6Cached */,
                 true /* dnsExpected */);
+
+        IkeManager.resetIkeLog();
     }
 
     @Test
@@ -1568,12 +1637,18 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
 
     @Test
     public void testIsDnsLookupRequired_LocalNone_RemoteNone() throws Exception {
+        final Log spyIkeLog = TestUtils.makeSpyLogDoLogErrorForWtf("Test");
+        IkeManager.setIkeLog(spyIkeLog);
+
         verifyIsDnsLookupRequired(
                 false /* hasLocalV4 */,
                 false /* hasLocalV6 */,
                 false /* hasRemoteV4Cached */,
                 false /* hasRemoteV6Cached */,
                 true /* dnsExpected */);
+        verify(spyIkeLog).wtf(anyString(), anyString());
+
+        IkeManager.resetIkeLog();
     }
 
     @Test
@@ -1604,6 +1679,40 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
                 true /* hasRemoteV4Cached */,
                 true /* hasRemoteV6Cached */,
                 false /* dnsExpected */);
+    }
+
+    @Test
+    public void testIsDnsLookupRequired_LocalV4_RemoteV4V6_FlagOff() throws Exception {
+        doReturn(false)
+                .when(mIkeContext)
+                .getDeviceConfigPropertyBoolean(eq(CONFIG_USE_CACHED_ADDRS), anyBoolean());
+        verifyIsDnsLookupRequired(
+                true /* hasLocalV4 */,
+                false /* hasLocalV6 */,
+                true /* hasRemoteV4Cached */,
+                true /* hasRemoteV6Cached */,
+                true /* dnsExpected */);
+    }
+
+    @Test
+    public void testIsDnsLookupRequired_LocalV4_RemoteV4V6_FlagOn() throws Exception {
+        verifyIsDnsLookupRequired(
+                true /* hasLocalV4 */,
+                false /* hasLocalV6 */,
+                true /* hasRemoteV4Cached */,
+                true /* hasRemoteV6Cached */,
+                false /* dnsExpected */);
+    }
+
+    @Test
+    public void testForceDns() throws Exception {
+        when(mMockIkeParams.hasIkeOption(eq(IKE_OPTION_FORCE_DNS_RESOLUTION))).thenReturn(true);
+        verifyIsDnsLookupRequired(
+                false /* hasLocalV4 */,
+                true /* hasLocalV6 */,
+                false /* hasRemoteV4Cached */,
+                true /* hasRemoteV6Cached */,
+                true /* dnsExpected */);
     }
 
     private void verifyDnsLookupWithCachedIpv6Address(boolean isNat64, boolean dnsExpected)
