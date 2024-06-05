@@ -48,6 +48,7 @@ package android.net.ipsec.ike {
   }
 
   public final class IkeSession implements java.lang.AutoCloseable {
+    method @FlaggedApi("com.android.ipsec.flags.liveness_check_api") public void requestLivenessCheck();
     method public void setNetwork(@NonNull android.net.Network);
   }
 
@@ -55,6 +56,13 @@ package android.net.ipsec.ike {
     method @Deprecated public default void onClosedExceptionally(@NonNull android.net.ipsec.ike.exceptions.IkeException);
     method @Deprecated public default void onError(@NonNull android.net.ipsec.ike.exceptions.IkeProtocolException);
     method public default void onIkeSessionConnectionInfoChanged(@NonNull android.net.ipsec.ike.IkeSessionConnectionInfo);
+    method @FlaggedApi("com.android.ipsec.flags.liveness_check_api") public default void onLivenessStatusChanged(int);
+    field @FlaggedApi("com.android.ipsec.flags.liveness_check_api") public static final int LIVENESS_STATUS_BACKGROUND_ONGOING = 3; // 0x3
+    field @FlaggedApi("com.android.ipsec.flags.liveness_check_api") public static final int LIVENESS_STATUS_BACKGROUND_STARTED = 2; // 0x2
+    field @FlaggedApi("com.android.ipsec.flags.liveness_check_api") public static final int LIVENESS_STATUS_FAILURE = 5; // 0x5
+    field @FlaggedApi("com.android.ipsec.flags.liveness_check_api") public static final int LIVENESS_STATUS_ON_DEMAND_ONGOING = 1; // 0x1
+    field @FlaggedApi("com.android.ipsec.flags.liveness_check_api") public static final int LIVENESS_STATUS_ON_DEMAND_STARTED = 0; // 0x0
+    field @FlaggedApi("com.android.ipsec.flags.liveness_check_api") public static final int LIVENESS_STATUS_SUCCESS = 4; // 0x4
   }
 
   public final class IkeSessionConfiguration {
@@ -70,6 +78,7 @@ package android.net.ipsec.ike {
     method @NonNull public java.util.List<android.net.ipsec.ike.IkeSessionParams.IkeConfigRequest> getConfigurationRequests();
     method @IntRange(from=0x0, to=0x3f) public int getDscp();
     method @Nullable public android.net.ipsec.ike.ike3gpp.Ike3gppExtension getIke3gppExtension();
+    method @FlaggedApi("com.android.ipsec.flags.liveness_check_api") @NonNull public int[] getLivenessRetransmissionTimeoutsMillis();
     method @Deprecated @NonNull public java.util.List<android.net.ipsec.ike.IkeSaProposal> getSaProposals();
     field public static final int IKE_OPTION_AUTOMATIC_KEEPALIVE_ON_OFF = 8; // 0x8
     field public static final int IKE_OPTION_REKEY_MOBILITY = 5; // 0x5
@@ -82,6 +91,7 @@ package android.net.ipsec.ike {
     method @Deprecated @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder addSaProposal(@NonNull android.net.ipsec.ike.IkeSaProposal);
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder setDscp(@IntRange(from=0x0, to=0x3f) int);
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder setIke3gppExtension(@NonNull android.net.ipsec.ike.ike3gpp.Ike3gppExtension);
+    method @FlaggedApi("com.android.ipsec.flags.liveness_check_api") @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder setLivenessRetransmissionTimeoutsMillis(@NonNull int[]);
   }
 
   public static interface IkeSessionParams.ConfigRequestIpv4PcscfServer extends android.net.ipsec.ike.IkeSessionParams.IkeConfigRequest {
@@ -116,12 +126,12 @@ package android.net.ipsec.ike.exceptions {
 package android.net.ipsec.ike.ike3gpp {
 
   public final class Ike3gppBackoffTimer extends android.net.ipsec.ike.ike3gpp.Ike3gppData {
-    ctor public Ike3gppBackoffTimer(byte, int);
-    method public int getBackoffCause();
+    ctor public Ike3gppBackoffTimer(byte, @IntRange(from=0, to=0x3fff) int);
+    method @IntRange(from=0, to=0x3fff) public int getBackoffCause();
     method public byte getBackoffTimer();
     method public int getDataType();
-    field public static final int ERROR_TYPE_NETWORK_FAILURE = 10500; // 0x2904
-    field public static final int ERROR_TYPE_NO_APN_SUBSCRIPTION = 9002; // 0x232a
+    field @Deprecated public static final int ERROR_TYPE_NETWORK_FAILURE = 10500; // 0x2904
+    field @Deprecated public static final int ERROR_TYPE_NO_APN_SUBSCRIPTION = 9002; // 0x232a
   }
 
   public abstract class Ike3gppData {

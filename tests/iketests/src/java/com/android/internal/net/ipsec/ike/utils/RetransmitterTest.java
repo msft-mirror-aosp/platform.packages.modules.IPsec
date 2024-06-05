@@ -130,4 +130,67 @@ public final class RetransmitterTest {
 
         verify(mMockHandler).removeMessages(eq(CMD_RETRANSMIT), eq(mRetransmitter));
     }
+
+    @Test
+    public void testRetransmitterStopsRetransmittingAndFinished() throws Exception {
+        // stop retransmitting.
+        mRetransmitter.stopRetransmitting();
+
+        // verify that stopRetransmitting removes CMD_RETRANSMIT.
+        verify(mMockHandler).removeMessages(eq(CMD_RETRANSMIT), eq(mRetransmitter));
+
+        // test retransmit with finished Retransmitter.
+        mRetransmitter.retransmit();
+        mRetransmitter.restartRetransmitting();
+
+        // verify that no retransmitted.
+        assertEquals(0, mRetransmitter.mSendCallCount);
+    }
+
+    @Test
+    public void testRetransmitInSuspended() throws Exception {
+        mRetransmitter.suspendRetransmitting();
+        mRetransmitter.retransmit();
+        assertEquals(0, mRetransmitter.mSendCallCount);
+    }
+
+    @Test
+    public void testSuspendAndRestartRetransmit() throws Exception {
+        mRetransmitter.suspendRetransmitting();
+        mRetransmitter.retransmit();
+        assertEquals(0, mRetransmitter.mSendCallCount);
+
+        mRetransmitter.restartRetransmitting();
+        assertEquals(1, mRetransmitter.mSendCallCount);
+
+        verify(mMockHandler).obtainMessage(eq(CMD_RETRANSMIT), eq(mRetransmitter));
+        verify(mMockHandler)
+                .sendMessageDelayed(any(Message.class), eq((long) IKE_RETRANS_TIMEOUT_MS_LIST[0]));
+    }
+
+    @Test
+    public void testRestartRetransmit() throws Exception {
+        int expectedCount = IKE_RETRANS_TIMEOUT_MS_LIST.length * 2;
+
+        for (long expectedTimeout : IKE_RETRANS_TIMEOUT_MS_LIST) {
+            mRetransmitter.retransmit();
+            assertFalse(mRetransmitter.mFailed);
+            verify(mMockHandler).sendMessageDelayed(any(Message.class), eq(expectedTimeout));
+        }
+
+        // Suspend and restart from the beginning.
+        mRetransmitter.suspendRetransmitting();
+        mRetransmitter.restartRetransmitting();
+
+        for (long expectedTimeout : IKE_RETRANS_TIMEOUT_MS_LIST) {
+            assertFalse(mRetransmitter.mFailed);
+            verify(mMockHandler, times(2))
+                    .sendMessageDelayed(any(Message.class), eq(expectedTimeout));
+            mRetransmitter.retransmit();
+        }
+
+        assertEquals(expectedCount, mRetransmitter.mSendCallCount);
+        verify(mMockHandler, times(expectedCount))
+                .obtainMessage(eq(CMD_RETRANSMIT), eq(mRetransmitter));
+    }
 }

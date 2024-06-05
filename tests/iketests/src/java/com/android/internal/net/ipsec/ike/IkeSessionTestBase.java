@@ -34,6 +34,7 @@ import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -57,7 +58,6 @@ import com.android.internal.net.ipsec.test.ike.testutils.MockIpSecTestUtils;
 import com.android.internal.net.ipsec.test.ike.utils.IState;
 import com.android.internal.net.ipsec.test.ike.utils.IkeAlarmReceiver;
 import com.android.internal.net.ipsec.test.ike.utils.IkeMetrics;
-import com.android.internal.net.ipsec.test.ike.utils.IkeMetricsInterface;
 import com.android.internal.net.ipsec.test.ike.utils.RandomnessFactory;
 
 import org.junit.Before;
@@ -250,15 +250,36 @@ public abstract class IkeSessionTestBase {
     protected void verifyMetricsLogged(int sessionType, int stateCode, int exceptionCode) {
         verify(mIkeMetrics)
                 .logSessionTerminated(
-                        IkeMetricsInterface.IKE_SESSION_TERMINATED__IKE_CALLER__CALLER_UNKNOWN,
-                        sessionType,
-                        stateCode,
-                        exceptionCode);
+                        IkeMetrics.IKE_CALLER_UNKNOWN, sessionType, stateCode, exceptionCode);
+    }
+
+    protected void verifyIkeSaMetricsLogged(
+            int count,
+            int ikeCaller,
+            int ikeSessionType,
+            int sessionState,
+            int dhGroup,
+            int encryptionAlgorithm,
+            int keyLength,
+            int integrityAlgorithm,
+            int prfAlgorithm,
+            int exceptionCode) {
+        verify(mIkeMetrics, times(count))
+                .logSaNegotiation(
+                        eq(ikeCaller),
+                        eq(ikeSessionType),
+                        eq(sessionState),
+                        eq(dhGroup),
+                        eq(encryptionAlgorithm),
+                        eq(keyLength),
+                        eq(integrityAlgorithm),
+                        eq(prfAlgorithm),
+                        eq(exceptionCode));
     }
 
     protected int getStateCode(IState state) {
         return state instanceof AbstractSessionStateMachine.ExceptionHandlerBase
                 ? ((AbstractSessionStateMachine.ExceptionHandlerBase) state).getMetricsStateCode()
-                : IkeMetricsInterface.IKE_SESSION_TERMINATED__IKE_STATE__STATE_UNKNOWN;
+                : IkeMetrics.IKE_STATE_UNKNOWN;
     }
 }
