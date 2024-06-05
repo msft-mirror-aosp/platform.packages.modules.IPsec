@@ -28,10 +28,12 @@ import static android.net.ipsec.ike.IkeSessionParams.IKE_NATT_KEEPALIVE_DELAY_SE
 import static android.net.ipsec.ike.IkeSessionParams.IKE_NATT_KEEPALIVE_DELAY_SEC_MIN;
 import static android.net.ipsec.ike.IkeSessionParams.IKE_OPTION_AUTOMATIC_ADDRESS_FAMILY_SELECTION;
 import static android.net.ipsec.ike.IkeSessionParams.IKE_OPTION_AUTOMATIC_NATT_KEEPALIVES;
+import static android.net.ipsec.ike.IkeSessionParams.IKE_OPTION_FORCE_DNS_RESOLUTION;
 import static android.net.ipsec.ike.IkeSessionParams.IKE_OPTION_FORCE_PORT_4500;
 import static android.net.ipsec.ike.exceptions.IkeException.wrapAsIkeException;
 
 import static com.android.internal.net.ipsec.ike.IkeContext.CONFIG_AUTO_NATT_KEEPALIVES_CELLULAR_TIMEOUT_OVERRIDE_SECONDS;
+import static com.android.internal.net.ipsec.ike.IkeContext.CONFIG_USE_CACHED_ADDRS;
 import static com.android.internal.net.ipsec.ike.utils.IkeAlarm.IkeAlarmConfig;
 import static com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver.ACTION_KEEPALIVE;
 
@@ -52,6 +54,7 @@ import android.net.ipsec.ike.exceptions.IkeException;
 import android.os.Handler;
 import android.os.Message;
 import android.system.ErrnoException;
+import android.util.SparseArray;
 
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.net.ipsec.ike.IkeContext;
@@ -67,8 +70,10 @@ import com.android.internal.net.ipsec.ike.keepalive.IkeNattKeepalive.KeepaliveCo
 import com.android.internal.net.ipsec.ike.message.IkeHeader;
 import com.android.internal.net.ipsec.ike.shim.ShimUtils;
 import com.android.internal.net.ipsec.ike.utils.IkeAlarm;
+import com.android.internal.net.ipsec.ike.utils.IkeMetrics;
 
 import java.io.IOException;
+import java.io.PrintWriter;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.net.Inet4Address;
@@ -178,6 +183,17 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
     private Network mUnderpinnedNetwork;
 
     private IkeNattKeepalive mIkeNattKeepalive;
+
+    private static final SparseArray<String> NAT_STATUS_TO_STR;
+
+    static {
+        NAT_STATUS_TO_STR = new SparseArray<>();
+        NAT_STATUS_TO_STR.put(
+                NAT_TRAVERSAL_SUPPORT_NOT_CHECKED, "NAT_TRAVERSAL_SUPPORT_NOT_CHECKED");
+        NAT_STATUS_TO_STR.put(NAT_TRAVERSAL_UNSUPPORTED, "NAT_TRAVERSAL_UNSUPPORTED");
+        NAT_STATUS_TO_STR.put(NAT_NOT_DETECTED, "NAT_NOT_DETECTED");
+        NAT_STATUS_TO_STR.put(NAT_DETECTED, "NAT_DETECTED");
+    }
 
     /** Constructor of IkeConnectionController */
     @VisibleForTesting
@@ -708,6 +724,18 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
         return mNetwork;
     }
 
+    /** Gets the underlying network type for Metrics */
+    public @IkeMetrics.IkeUnderlyingNetworkType int getMetricsNetworkType() {
+        if (mNc.hasTransport(TRANSPORT_WIFI)) {
+            return IkeMetrics.IKE_UNDERLYING_NETWORK_TYPE_WIFI;
+        } else if (mNc.hasTransport(TRANSPORT_CELLULAR)) {
+            return IkeMetrics.IKE_UNDERLYING_NETWORK_TYPE_CELLULAR;
+        }
+
+        // for other types.
+        return IkeMetrics.IKE_UNDERLYING_NETWORK_TYPE_UNSPECIFIED;
+    }
+
     /** Gets the underpinned network */
     public Network getUnderpinnedNetwork() {
         return mUnderpinnedNetwork;
@@ -1116,30 +1144,29 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
     /**
      * Return whether DNS lookup is required during mobility update
      *
-     * <p>Require DNS lookup when one of the following condition is true:
+     * <p>DNS lookup will be skipped when IKE_OPTION_FORCE_DNS_RESOLUTION is disabled and one of the
+     * following condition is true:
      *
      * <ul>
-     *   <li>The network has changed
-     *   <li>The locally supported versions misaligned with the cached remotely supported versions
-     *   <li>Neither of the two versions are supported locally or remotely
+     *   <li>The cached remote addresses include both IPv4 and IPv6 addresses
+     *   <li>The locally supported IP families and cached remote addresses match. In other words, if
+     *       local addresses include both IP versions and the cached remote addresses only have one
+     *       IP family, DNS lookup is required. This might happen when it takes longer for the
+     *       device to provide 464xlat IPv4 and thus the cached addresses do not have it. However,
+     *       if the local addresses only support IPv4, but the cached remote addresses have global
+     *       IPv4 and IPv6 addresses, DNS lookup can be skipped.
      * </ul>
      */
     @VisibleForTesting
     public boolean isDnsLookupRequiredWithGlobalRemoteAddress(
             Network oldNetwork, Network network, LinkProperties linkProperties) {
-        // If the network changes, perform a new DNS lookup to ensure that the correct remote
-        // address is used. This ensures that DNS returns addresses for the correct address families
-        // (important if using a v4/v6-only network). This also ensures that DNS64 is handled
-        // correctly when switching between networks that may have different IPv6 prefixes.
-        if (!network.equals(oldNetwork)) {
-            return true;
-        }
-
         final Set<Integer> localIpVersions =
                 getSupportedVersions(
                         hasLocalIpV4Address(linkProperties), linkProperties.hasGlobalIpv6Address());
         final Set<Integer> remoteIpVersionsCached =
-                getSupportedVersions(!mRemoteAddressesV4.isEmpty(), !mRemoteAddressesV6.isEmpty());
+                getSupportedVersions(
+                        !mRemoteAddressesV4.isEmpty(),
+                        !mRemoteAddressesV6.isEmpty() /* NAT64 not included */);
 
         getIkeLog()
                 .d(
@@ -1149,9 +1176,30 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
                                 + " remoteIpVersionsCached "
                                 + remoteIpVersionsCached);
 
-        if (Objects.equals(localIpVersions, remoteIpVersionsCached) && !localIpVersions.isEmpty()) {
+        // Programming error
+        if (localIpVersions.isEmpty()) {
+            getIkeLog()
+                    .wtf(
+                            TAG,
+                            "isDnsLookupRequiredWithGlobalRemoteAddress no local address on the"
+                                    + " Network");
+            return true;
+        }
+
+        if (mIkeParams.hasIkeOption(IKE_OPTION_FORCE_DNS_RESOLUTION)) {
+            return true;
+        }
+
+        if (network.equals(oldNetwork) && Objects.equals(localIpVersions, remoteIpVersionsCached)) {
             return false;
         }
+
+        if (mIkeContext.getDeviceConfigPropertyBoolean(
+                        CONFIG_USE_CACHED_ADDRS, false /* defaultValue */)
+                && remoteIpVersionsCached.containsAll(localIpVersions)) {
+            return false;
+        }
+
         return true;
     }
 
@@ -1176,6 +1224,16 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
 
         mNetwork = network;
         mNc = networkCapabilities;
+
+        // If there is no local address on the Network, report a fatal error and return
+        if (!hasLocalIpV4Address(linkProperties) && !linkProperties.hasGlobalIpv6Address()) {
+            mCallback.onError(
+                    wrapAsIkeException(
+                            ShimUtils.getInstance()
+                                    .getDnsFailedException(
+                                            "No local address on the Network " + mNetwork)));
+            return;
+        }
 
         // Remove all NAT64 addresses since they might be out-of-date
         for (Ipv6AddrInfo info : mRemoteAddressesV6) {
@@ -1243,6 +1301,56 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
         mNetworkCallback.setAddress(mLocalAddress);
 
         mCallback.onUnderlyingNetworkUpdated();
+    }
+
+    /**
+     * Dumps the state of {@link IkeConnectionController}
+     *
+     * @param pw {@link PrintWriter} to write the state of the object.
+     * @param prefix prefix for indentation
+     */
+    public void dump(PrintWriter pw, String prefix) {
+        // Please make sure that the dump is thread-safe
+        // so the client won't get a crash or exception when adding codes to the dump.
+
+        pw.println("------------------------------");
+        pw.println("IkeConnectionController:");
+        pw.println(prefix + "Network: " + mNetwork);
+        pw.println(prefix + "Nat status: " + NAT_STATUS_TO_STR.get(mNatStatus));
+        pw.println(prefix + "Local address: " + mLocalAddress);
+        pw.println(prefix + "Remote(Server) address: " + mRemoteAddress);
+        pw.println(prefix + "Mobility status: " + mMobilityEnabled);
+        printPortInfo(pw, prefix);
+        pw.println(
+                prefix + "Esp ip version: " + IkeSessionParams.IP_VERSION_TO_STR.get(mIpVersion));
+        pw.println(
+                prefix + "Esp encap type: " + IkeSessionParams.ENCAP_TYPE_TO_STR.get(mEncapType));
+        pw.println("------------------------------");
+        pw.println();
+    }
+
+    /**
+     * Port information may sometimes cause exceptions such as NPE or RTE, Dumps ports including the
+     * exception.
+     *
+     * @param pw {@link PrintWriter} to write the state of the object.
+     * @param prefix prefix for indentation
+     */
+    private void printPortInfo(PrintWriter pw, String prefix) {
+        // Make it thread-safe. Since this method may be accessed simultaneously from
+        // multiple threads, The socket is assigned locally and then printed.
+        IkeSocket socket = mIkeSocket;
+        if (socket == null) {
+            pw.println(prefix + "Local port: null socket");
+            pw.println(prefix + "Remote(server) port: null socket");
+        } else {
+            try {
+                pw.println(prefix + "Local port: " + socket.getLocalPort());
+            } catch (ErrnoException e) {
+                pw.println(prefix + "Local port: failed to get port");
+            }
+            pw.println(prefix + "Remote(server) port: " + socket.getIkeServerPort());
+        }
     }
 
     @Override

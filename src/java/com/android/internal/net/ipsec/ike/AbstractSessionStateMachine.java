@@ -23,7 +23,8 @@ import android.os.Message;
 import android.util.SparseArray;
 
 import com.android.internal.annotations.VisibleForTesting;
-import com.android.internal.net.ipsec.ike.utils.IkeMetricsInterface;
+import com.android.internal.net.ipsec.ike.net.IkeConnectionController;
+import com.android.internal.net.ipsec.ike.utils.IkeMetrics;
 import com.android.internal.util.IState;
 import com.android.internal.util.State;
 import com.android.internal.util.StateMachine;
@@ -191,7 +192,7 @@ abstract class AbstractSessionStateMachine extends StateMachine {
 
         protected abstract String getCmdString(int cmd);
 
-        protected abstract int getMetricsStateCode();
+        protected abstract @IkeMetrics.IkeState int getMetricsStateCode();
     }
 
     protected void executeUserCallback(Runnable r) {
@@ -234,26 +235,63 @@ abstract class AbstractSessionStateMachine extends StateMachine {
         return "Null State";
     }
 
-    protected void recordMetricsEvent_sessionTerminated(IkeException exception) {
+    private @IkeMetrics.IkeState int getMetricsIkeStateCode() {
         final IState currentState = getCurrentState();
-        final int stateCode =
-                currentState instanceof ExceptionHandlerBase
-                        ? ((ExceptionHandlerBase) currentState).getMetricsStateCode()
-                        : IkeMetricsInterface.IKE_SESSION_TERMINATED__IKE_STATE__STATE_UNKNOWN;
-        final int exceptionCode =
-                exception == null
-                        ? IkeMetricsInterface.IKE_SESSION_TERMINATED__IKE_ERROR__ERROR_NONE
-                        : exception.getMetricsErrorCode();
+        return currentState instanceof ExceptionHandlerBase
+                ? ((ExceptionHandlerBase) currentState).getMetricsStateCode()
+                : IkeMetrics.IKE_STATE_UNKNOWN;
+    }
+
+    protected void recordMetricsEvent_sessionTerminated(IkeException exception) {
+        final @IkeMetrics.IkeError int exceptionCode =
+                exception == null ? IkeMetrics.IKE_ERROR_NONE : exception.getMetricsErrorCode();
 
         getIkeMetrics()
                 .logSessionTerminated(
                         mIkeContext.getIkeCaller(),
                         getMetricsSessionType(),
-                        stateCode,
+                        getMetricsIkeStateCode(),
                         exceptionCode);
     }
 
-    protected abstract int getMetricsSessionType();
+    protected void recordMetricsEvent_LivenssCheckCompletion(
+            IkeConnectionController connectionController,
+            int elapsedTimeInMillis,
+            int numberOfOnGoing,
+            boolean resultSuccess) {
+        getIkeMetrics()
+                .logLivenessCheckCompleted(
+                        mIkeContext.getIkeCaller(),
+                        getMetricsIkeStateCode(),
+                        connectionController.getMetricsNetworkType(),
+                        elapsedTimeInMillis,
+                        numberOfOnGoing,
+                        resultSuccess);
+    }
+
+    protected void recordMetricsEvent_SaNegotiation(
+            int dhGroup,
+            int encryptionAlgorithm,
+            int keyLength,
+            int integrityAlgorithm,
+            int prfAlgorithm,
+            IkeException exception) {
+        final @IkeMetrics.IkeError int exceptionCode =
+                exception == null ? IkeMetrics.IKE_ERROR_NONE : exception.getMetricsErrorCode();
+        getIkeMetrics()
+                .logSaNegotiation(
+                        mIkeContext.getIkeCaller(),
+                        getMetricsSessionType(),
+                        getMetricsIkeStateCode(),
+                        dhGroup,
+                        encryptionAlgorithm,
+                        keyLength,
+                        integrityAlgorithm,
+                        prfAlgorithm,
+                        exceptionCode);
+    }
+
+    protected abstract @IkeMetrics.IkeSessionType int getMetricsSessionType();
 
     @Override
     protected void log(String s) {
