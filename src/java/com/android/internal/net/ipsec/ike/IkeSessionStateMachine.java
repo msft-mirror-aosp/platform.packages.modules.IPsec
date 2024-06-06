@@ -2597,6 +2597,18 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
                         sendEncryptedIkeMessage(responseIkeMessage);
 
+                        List<Integer> integrityAlgorithms = mSaProposal.getIntegrityAlgorithms();
+
+                        recordMetricsEvent_SaNegotiation(
+                                mSaProposal.getDhGroups().get(0),
+                                mSaProposal.getEncryptionTransforms()[0].id,
+                                mSaProposal.getEncryptionTransforms()[0].getSpecifiedKeyLength(),
+                                integrityAlgorithms.isEmpty()
+                                        ? IkeMetrics.INTEGRITY_ALGORITHM_NONE
+                                        : integrityAlgorithms.get(0),
+                                mSaProposal.getPseudorandomFunctions().get(0),
+                                null);
+
                         transitionTo(mRekeyIkeRemoteDelete);
                         mProcedureFinished = false;
                     } catch (IkeProtocolException e) {
@@ -3365,6 +3377,18 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 addIkeSaRecord(mCurrentIkeSaRecord);
                 ikeInitSuccess = true;
 
+                List<Integer> integrityAlgorithms = mSaProposal.getIntegrityAlgorithms();
+
+                recordMetricsEvent_SaNegotiation(
+                        mSaProposal.getDhGroups().get(0),
+                        mSaProposal.getEncryptionTransforms()[0].id,
+                        mSaProposal.getEncryptionTransforms()[0].getSpecifiedKeyLength(),
+                        integrityAlgorithms.isEmpty()
+                                ? IkeMetrics.INTEGRITY_ALGORITHM_NONE
+                                : integrityAlgorithms.get(0),
+                        mSaProposal.getPseudorandomFunctions().get(0),
+                        null);
+
                 mCreateIkeLocalIkeAuth.setIkeSetupData(
                         new IkeInitData(
                                 mInitialSetupData,
@@ -3393,6 +3417,14 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                                 mRetransmitter.getMessage().ikeHeader.ikeInitiatorSpi);
                         mIkeInitRequestBytes = null;
                         mIkeInitNoncePayload = null;
+
+                        recordMetricsEvent_SaNegotiation(
+                                requestedDhGroup,
+                                IkeMetrics.ENCRYPTION_ALGORITHM_UNSPECIFIED,
+                                IkeMetrics.KEY_LEN_UNSPECIFIED,
+                                IkeMetrics.INTEGRITY_ALGORITHM_NONE,
+                                IkeMetrics.PSEUDORANDOM_FUNCTION_UNSPECIFIED,
+                                keException);
 
                         mInitial.setIkeSetupData(
                                 new InitialSetupData(
@@ -5084,6 +5116,18 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
                 // Stop retransmissions
                 mRetransmitter.stopRetransmitting();
+
+                List<Integer> integrityAlgorithms = mSaProposal.getIntegrityAlgorithms();
+
+                recordMetricsEvent_SaNegotiation(
+                        mSaProposal.getDhGroups().get(0),
+                        mSaProposal.getEncryptionTransforms()[0].id,
+                        mSaProposal.getEncryptionTransforms()[0].getSpecifiedKeyLength(),
+                        integrityAlgorithms.isEmpty()
+                                ? IkeMetrics.INTEGRITY_ALGORITHM_NONE
+                                : integrityAlgorithms.get(0),
+                        mSaProposal.getPseudorandomFunctions().get(0),
+                        null);
             } catch (IkeProtocolException e) {
                 if (e instanceof InvalidSyntaxException) {
                     handleProcessRespOrSaCreationFailureAndQuit(e);
