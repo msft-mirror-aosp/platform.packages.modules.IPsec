@@ -542,6 +542,17 @@ public final class ChildSessionStateMachineTest extends IkeSessionTestBase {
         assertEquals(1, addrList.size());
         assertEquals(INTERNAL_ADDRESS, addrList.get(0).getAddress());
         assertEquals(IPV4_PREFIX_LEN, addrList.get(0).getPrefixLength());
+        verifyIkeSaMetricsLogged(
+                1,
+                IkeMetrics.IKE_CALLER_UNKNOWN,
+                IkeMetrics.IKE_SESSION_TYPE_CHILD,
+                IkeMetrics.IKE_STATE_CHILD_CREATE_LOCAL_CREATE,
+                SaProposal.DH_GROUP_NONE,
+                IkeMetrics.ENCRYPTION_ALGORITHM_AES_CBC,
+                IkeMetrics.KEY_LEN_AES_128,
+                IkeMetrics.INTEGRITY_ALGORITHM_HMAC_SHA1_96,
+                IkeMetrics.PSEUDORANDOM_FUNCTION_UNSPECIFIED,
+                IkeMetrics.IKE_ERROR_NONE);
     }
 
     private void verifyTsList(
@@ -1430,6 +1441,17 @@ public final class ChildSessionStateMachineTest extends IkeSessionTestBase {
         List<IkePayload> rekeyRespPayloads = receiveRekeyChildResponse();
         verifyLocalRekeyCreateIsDone(
                 rekeyRespPayloads, false /* isMobikeRekey */, LOCAL_ADDRESS, REMOTE_ADDRESS);
+        verifyIkeSaMetricsLogged(
+                1,
+                IkeMetrics.IKE_CALLER_UNKNOWN,
+                IkeMetrics.IKE_SESSION_TYPE_CHILD,
+                IkeMetrics.IKE_STATE_CHILD_REKEY_LOCAL_CREATE,
+                SaProposal.DH_GROUP_NONE,
+                IkeMetrics.ENCRYPTION_ALGORITHM_AES_CBC,
+                IkeMetrics.KEY_LEN_AES_128,
+                IkeMetrics.INTEGRITY_ALGORITHM_HMAC_SHA1_96,
+                IkeMetrics.PSEUDORANDOM_FUNCTION_UNSPECIFIED,
+                IkeMetrics.IKE_ERROR_NONE);
     }
 
     @Test
@@ -1742,6 +1764,17 @@ public final class ChildSessionStateMachineTest extends IkeSessionTestBase {
         // Verify that users are notified the creation of new inbound IpSecTransform
         verify(mSpyUserCbExecutor).execute(any(Runnable.class));
         verifyNotifyUsersCreateIpSecSa(mSpyRemoteInitNewChildSaRecord, true /*expectInbound*/);
+        verifyIkeSaMetricsLogged(
+                1,
+                IkeMetrics.IKE_CALLER_UNKNOWN,
+                IkeMetrics.IKE_SESSION_TYPE_CHILD,
+                IkeMetrics.IKE_STATE_CHILD_REKEY_REMOTE_CREATE,
+                SaProposal.DH_GROUP_NONE,
+                IkeMetrics.ENCRYPTION_ALGORITHM_AES_CBC,
+                IkeMetrics.KEY_LEN_AES_128,
+                IkeMetrics.INTEGRITY_ALGORITHM_HMAC_SHA1_96,
+                IkeMetrics.PSEUDORANDOM_FUNCTION_UNSPECIFIED,
+                IkeMetrics.IKE_ERROR_NONE);
     }
 
     private void verifyOutboundErrorNotify(int exchangeType, int errorCode) {
