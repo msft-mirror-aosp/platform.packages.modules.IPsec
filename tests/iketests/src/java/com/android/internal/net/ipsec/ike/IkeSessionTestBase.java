@@ -34,6 +34,7 @@ import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -250,6 +251,30 @@ public abstract class IkeSessionTestBase {
         verify(mIkeMetrics)
                 .logSessionTerminated(
                         IkeMetrics.IKE_CALLER_UNKNOWN, sessionType, stateCode, exceptionCode);
+    }
+
+    protected void verifyIkeSaMetricsLogged(
+            int count,
+            int ikeCaller,
+            int ikeSessionType,
+            int sessionState,
+            int dhGroup,
+            int encryptionAlgorithm,
+            int keyLength,
+            int integrityAlgorithm,
+            int prfAlgorithm,
+            int exceptionCode) {
+        verify(mIkeMetrics, times(count))
+                .logSaNegotiation(
+                        eq(ikeCaller),
+                        eq(ikeSessionType),
+                        eq(sessionState),
+                        eq(dhGroup),
+                        eq(encryptionAlgorithm),
+                        eq(keyLength),
+                        eq(integrityAlgorithm),
+                        eq(prfAlgorithm),
+                        eq(exceptionCode));
     }
 
     protected int getStateCode(IState state) {
