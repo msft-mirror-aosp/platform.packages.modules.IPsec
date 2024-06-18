@@ -19,6 +19,7 @@ package com.android.internal.net.ipsec.test.ike;
 import static android.net.ipsec.ike.IkeSessionConfiguration.EXTENSION_TYPE_MOBIKE;
 import static android.net.ipsec.test.ike.IkeSessionConfiguration.EXTENSION_TYPE_FRAGMENTATION;
 import static android.net.ipsec.test.ike.IkeSessionParams.IKE_OPTION_EAP_ONLY_AUTH;
+import static android.net.ipsec.test.ike.IkeSessionParams.IKE_OPTION_FORCE_DNS_RESOLUTION;
 import static android.net.ipsec.test.ike.IkeSessionParams.IKE_OPTION_FORCE_PORT_4500;
 import static android.net.ipsec.test.ike.IkeSessionParams.IKE_OPTION_MOBIKE;
 import static android.net.ipsec.test.ike.IkeSessionParams.IKE_OPTION_REKEY_MOBILITY;
@@ -39,6 +40,7 @@ import static android.system.OsConstants.AF_INET6;
 import static com.android.internal.net.TestUtils.createMockRandomFactory;
 import static com.android.internal.net.eap.test.EapResult.EapResponse.RESPONSE_FLAG_EAP_AKA_SERVER_AUTHENTICATED;
 import static com.android.internal.net.ipsec.test.ike.AbstractSessionStateMachine.RETRY_INTERVAL_MS;
+import static com.android.internal.net.ipsec.test.ike.IkeContext.CONFIG_USE_CACHED_ADDRS;
 import static com.android.internal.net.ipsec.test.ike.IkeSessionStateMachine.CMD_ALARM_FIRED;
 import static com.android.internal.net.ipsec.test.ike.IkeSessionStateMachine.CMD_FORCE_TRANSITION;
 import static com.android.internal.net.ipsec.test.ike.IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET;
@@ -933,9 +935,12 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
             InetAddress expectedRemoteAddress)
             throws Exception {
         IkeContext ikeContext =
-                new IkeSessionStateMachine.Dependencies()
-                        .newIkeContext(
-                                mLooper.getLooper(), mSpyContext, ikeParams.getConfiguredNetwork());
+                spy(
+                        new IkeSessionStateMachine.Dependencies()
+                                .newIkeContext(
+                                        mLooper.getLooper(),
+                                        mSpyContext,
+                                        ikeParams.getConfiguredNetwork()));
         IkeConnectionController.Callback mockIkeConnectionCtrlCb =
                 mock(IkeConnectionController.Callback.class);
         IkeConnectionController.Dependencies spyIkeConnectionCtrlDeps =
@@ -975,6 +980,10 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         // spuriously restart keepalives, thinking that the current delay is zero.
         final IkeAlarmConfig alarmConfig = spy(new IkeAlarmConfig(mSpyContext,
                 "mock", NATT_KEEPALIVE_DELAY * 1_000, null, null));
+
+        doReturn(true)
+                .when(ikeContext)
+                .getDeviceConfigPropertyBoolean(eq(CONFIG_USE_CACHED_ADDRS), anyBoolean());
         mSpyIkeConnectionCtrl =
                 spy(
                         new IkeConnectionController(
@@ -1038,6 +1047,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     private IkeSessionParams.Builder buildIkeSessionParamsCommon() throws Exception {
         return new IkeSessionParams.Builder(mMockConnectManager)
                 .setServerHostname(REMOTE_HOSTNAME)
+                .addIkeOption(IKE_OPTION_FORCE_DNS_RESOLUTION)
                 .addSaProposal(buildSaProposal())
                 .setLocalIdentification(LOCAL_ID_IPV4)
                 .setRemoteIdentification(REMOTE_ID_FQDN)
@@ -1736,6 +1746,17 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
         verifyOutboundKePayload(SaProposal.DH_GROUP_2048_BIT_MODP);
         verify(mSpyIkeConnectionCtrl, atLeast(1)).tearDown();
+        verifyIkeSaMetricsLogged(
+                1,
+                IkeMetrics.IKE_CALLER_UNKNOWN,
+                IkeMetrics.IKE_SESSION_TYPE_IKE,
+                IkeMetrics.IKE_STATE_IKE_CREATE_LOCAL_IKE_INIT,
+                SaProposal.DH_GROUP_2048_BIT_MODP,
+                IkeMetrics.ENCRYPTION_ALGORITHM_UNSPECIFIED,
+                IkeMetrics.KEY_LEN_UNSPECIFIED,
+                IkeMetrics.INTEGRITY_ALGORITHM_NONE,
+                IkeMetrics.PSEUDORANDOM_FUNCTION_UNSPECIFIED,
+                IkeMetrics.IKE_ERROR_PROTOCOL_INVALID_KE_PAYLOAD);
     }
 
     private ReceivedIkePacket getIkeInitRespWithCookie() throws Exception {
@@ -1953,6 +1974,17 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                 IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, dummyReceivedIkePacket);
         mLooper.dispatchAll();
         verifyIncrementLocaReqMsgId();
+        verifyIkeSaMetricsLogged(
+                1,
+                IkeMetrics.IKE_CALLER_UNKNOWN,
+                IkeMetrics.IKE_SESSION_TYPE_IKE,
+                IkeMetrics.IKE_STATE_IKE_CREATE_LOCAL_IKE_INIT,
+                SaProposal.DH_GROUP_1024_BIT_MODP,
+                IkeMetrics.ENCRYPTION_ALGORITHM_AES_CBC,
+                IkeMetrics.KEY_LEN_AES_128,
+                IkeMetrics.INTEGRITY_ALGORITHM_HMAC_SHA1_96,
+                IkeMetrics.PSEUDORANDOM_FUNCTION_HMAC_SHA1,
+                IkeMetrics.IKE_ERROR_NONE);
         return dummyReceivedIkePacket;
     }
 
@@ -4037,6 +4069,17 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         assertEquals(mSpyLocalInitIkeSaRecord, mIkeSessionStateMachine.mLocalInitNewIkeSaRecord);
         verify(mSpyIkeConnectionCtrl.getIkeSocket())
                 .registerIke(eq(mSpyLocalInitIkeSaRecord.getLocalSpi()), eq(mSpyIkeConnectionCtrl));
+        verifyIkeSaMetricsLogged(
+                1,
+                IkeMetrics.IKE_CALLER_UNKNOWN,
+                IkeMetrics.IKE_SESSION_TYPE_IKE,
+                IkeMetrics.IKE_STATE_IKE_REKEY_LOCAL_CREATE,
+                SaProposal.DH_GROUP_1024_BIT_MODP,
+                IkeMetrics.ENCRYPTION_ALGORITHM_AES_CBC,
+                IkeMetrics.KEY_LEN_AES_128,
+                IkeMetrics.INTEGRITY_ALGORITHM_HMAC_SHA1_96,
+                IkeMetrics.PSEUDORANDOM_FUNCTION_HMAC_SHA1,
+                IkeMetrics.IKE_ERROR_NONE);
     }
 
     @Test
@@ -4453,6 +4496,19 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         verify(mMockCurrentIkeSocket)
                 .registerIke(
                         eq(mSpyRemoteInitIkeSaRecord.getLocalSpi()), eq(mSpyIkeConnectionCtrl));
+
+        // IKE_STATE_IKE_RECEIVING for remote rekey
+        verifyIkeSaMetricsLogged(
+                1,
+                IkeMetrics.IKE_CALLER_UNKNOWN,
+                IkeMetrics.IKE_SESSION_TYPE_IKE,
+                IkeMetrics.IKE_STATE_IKE_RECEIVING,
+                SaProposal.DH_GROUP_1024_BIT_MODP,
+                IkeMetrics.ENCRYPTION_ALGORITHM_AES_CBC,
+                IkeMetrics.KEY_LEN_AES_128,
+                IkeMetrics.INTEGRITY_ALGORITHM_HMAC_SHA1_96,
+                IkeMetrics.PSEUDORANDOM_FUNCTION_HMAC_SHA1,
+                IkeMetrics.IKE_ERROR_NONE);
     }
 
     @Ignore
@@ -6649,8 +6705,6 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
             boolean isIpv4, InetAddress localAddress, InetAddress remoteAddress, int dnsLookups)
             throws Exception {
         Network newNetwork = mock(Network.class);
-
-        mSpyIkeConnectionCtrl.addRemoteAddress(remoteAddress);
 
         LinkAddress linkAddress = mock(LinkAddress.class);
         when(linkAddress.getAddress()).thenReturn(localAddress);
