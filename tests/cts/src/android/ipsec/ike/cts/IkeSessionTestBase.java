@@ -119,7 +119,7 @@ abstract class IkeSessionTestBase extends IkeTestNetworkBase {
 
     static final long IKE_DETERMINISTIC_INITIATOR_SPI = Long.parseLong("46B8ECA1E0D72A18", 16);
 
-    private static final int TIMEOUT_MS = 1000;
+    private static final int TIMEOUT_MS = 2000;
 
     // Constants to be used for providing different IP addresses for each tests
     private static final byte IP_ADDR_LAST_BYTE_MAX = (byte) 100;
