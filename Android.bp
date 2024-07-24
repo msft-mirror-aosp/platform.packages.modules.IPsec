@@ -56,12 +56,7 @@ java_sdk_library {
         "android.net.ipsec.ike.ike3gpp",
     ],
 
-    hidden_api_packages: [
-        "com.android.internal.net",
-    ],
-
     lint: {
-        strict_updatability_linting: true,
         baseline_filename: "lint-baseline.xml",
     },
 
@@ -120,9 +115,6 @@ java_library {
         "modules-utils-statemachine",
     ],
     sdk_version: "module_current",
-    lint: {
-        baseline_filename: "lint-baseline.xml",
-    },
 }
 
 java_library {
@@ -141,9 +133,6 @@ java_library {
     // overshadowed by the IKE jar in framework and bootclasspath which will
     // cause compiling and runtime errors respectively.
     jarjar_rules: "jarjar-rules-test.txt",
-    lint: {
-        baseline_filename: "lint-baseline.xml",
-    },
 }
 
 java_library {
@@ -151,9 +140,6 @@ java_library {
     installable: false, // Used only for building the "ike-test-utils"
     srcs: ["src/java/**/IkeCertUtils.java"],
     jarjar_rules: "jarjar-rules-test.txt",
-    lint: {
-        baseline_filename: "lint-baseline.xml",
-    },
 }
 
 java_library {
@@ -165,9 +151,6 @@ java_library {
     static_libs: ["ike-test-utils-dependency"],
     libs: ["androidx.test.rules"],
     visibility: ["//packages/modules/IPsec/tests/cts"],
-    lint: {
-        baseline_filename: "lint-baseline.xml",
-    },
 }
 
 sdk {

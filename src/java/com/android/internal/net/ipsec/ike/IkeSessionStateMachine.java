@@ -1890,7 +1890,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
      * IKE packet. Idle state will defer the received packet to a BusyState to process it.
      */
     private abstract class BusyState extends LocalRequestQueuer {
-        protected Retransmitter mRetransmitter;
+        @Nullable protected Retransmitter mRetransmitter;
 
         @Override
         public boolean processStateMessage(Message message) {
@@ -2596,6 +2596,18 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                                         ikeMessage, responseIkeMessage, false /*isLocalInit*/);
 
                         sendEncryptedIkeMessage(responseIkeMessage);
+
+                        List<Integer> integrityAlgorithms = mSaProposal.getIntegrityAlgorithms();
+
+                        recordMetricsEvent_SaNegotiation(
+                                mSaProposal.getDhGroups().get(0),
+                                mSaProposal.getEncryptionTransforms()[0].id,
+                                mSaProposal.getEncryptionTransforms()[0].getSpecifiedKeyLength(),
+                                integrityAlgorithms.isEmpty()
+                                        ? IkeMetrics.INTEGRITY_ALGORITHM_NONE
+                                        : integrityAlgorithms.get(0),
+                                mSaProposal.getPseudorandomFunctions().get(0),
+                                null);
 
                         transitionTo(mRekeyIkeRemoteDelete);
                         mProcedureFinished = false;
@@ -3365,6 +3377,18 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 addIkeSaRecord(mCurrentIkeSaRecord);
                 ikeInitSuccess = true;
 
+                List<Integer> integrityAlgorithms = mSaProposal.getIntegrityAlgorithms();
+
+                recordMetricsEvent_SaNegotiation(
+                        mSaProposal.getDhGroups().get(0),
+                        mSaProposal.getEncryptionTransforms()[0].id,
+                        mSaProposal.getEncryptionTransforms()[0].getSpecifiedKeyLength(),
+                        integrityAlgorithms.isEmpty()
+                                ? IkeMetrics.INTEGRITY_ALGORITHM_NONE
+                                : integrityAlgorithms.get(0),
+                        mSaProposal.getPseudorandomFunctions().get(0),
+                        null);
+
                 mCreateIkeLocalIkeAuth.setIkeSetupData(
                         new IkeInitData(
                                 mInitialSetupData,
@@ -3393,6 +3417,14 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                                 mRetransmitter.getMessage().ikeHeader.ikeInitiatorSpi);
                         mIkeInitRequestBytes = null;
                         mIkeInitNoncePayload = null;
+
+                        recordMetricsEvent_SaNegotiation(
+                                requestedDhGroup,
+                                IkeMetrics.ENCRYPTION_ALGORITHM_UNSPECIFIED,
+                                IkeMetrics.KEY_LEN_UNSPECIFIED,
+                                IkeMetrics.INTEGRITY_ALGORITHM_NONE,
+                                IkeMetrics.PSEUDORANDOM_FUNCTION_UNSPECIFIED,
+                                keException);
 
                         mInitial.setIkeSetupData(
                                 new InitialSetupData(
@@ -5084,6 +5116,18 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
                 // Stop retransmissions
                 mRetransmitter.stopRetransmitting();
+
+                List<Integer> integrityAlgorithms = mSaProposal.getIntegrityAlgorithms();
+
+                recordMetricsEvent_SaNegotiation(
+                        mSaProposal.getDhGroups().get(0),
+                        mSaProposal.getEncryptionTransforms()[0].id,
+                        mSaProposal.getEncryptionTransforms()[0].getSpecifiedKeyLength(),
+                        integrityAlgorithms.isEmpty()
+                                ? IkeMetrics.INTEGRITY_ALGORITHM_NONE
+                                : integrityAlgorithms.get(0),
+                        mSaProposal.getPseudorandomFunctions().get(0),
+                        null);
             } catch (IkeProtocolException e) {
                 if (e instanceof InvalidSyntaxException) {
                     handleProcessRespOrSaCreationFailureAndQuit(e);
@@ -6015,16 +6059,18 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
      */
     public void dump(PrintWriter pw) {
         super.dump(new FileDescriptor(), pw, new String[0]);
+        // Please make sure that the dump is thread-safe
+        // so the client won't get a crash or exception when adding codes to the dump.
 
         // TODO(b/310058405): To use IndentingPrintWriter Utility Class for Indentation purpose
         String prefix = "    ";
 
-        // dump ike session params data
+        // Dump ike session params data.
         if (mIkeSessionParams != null) {
             mIkeSessionParams.dump(pw, prefix);
         }
 
-        // dump ike connection controller data
+        // Dump ike connection controller data.
         if (mIkeConnectionCtrl != null) {
             mIkeConnectionCtrl.dump(pw, prefix);
         }
