@@ -127,7 +127,7 @@ java_library {
     srcs: [":ike-srcs"],
     libs: [
         "unsupportedappusage",
-        "conscrypt.module.public.api",
+        "conscrypt.module.public.api.stubs",
     ],
     static_libs: ["ike-internals"],
 
