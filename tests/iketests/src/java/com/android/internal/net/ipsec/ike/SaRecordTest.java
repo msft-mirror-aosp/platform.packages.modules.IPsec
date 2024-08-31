@@ -21,12 +21,14 @@ import static com.android.internal.net.TestUtils.createMockRandomFactory;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 import static org.mockito.AdditionalMatchers.aryEq;
 import static org.mockito.Matchers.anyInt;
 import static org.mockito.Matchers.anyObject;
 import static org.mockito.Matchers.anyString;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -177,9 +179,9 @@ public final class SaRecordTest {
         byte[] nonceResp = TestUtils.hexStringToByteArray(IKE_NONCE_RESP_HEX_STRING);
 
         IkeSecurityParameterIndex ikeInitSpi =
-                IKE_SPI_GENERATOR.allocateSpi(LOCAL_ADDRESS, IKE_INIT_SPI);
+                spy(IKE_SPI_GENERATOR.allocateSpi(LOCAL_ADDRESS, IKE_INIT_SPI));
         IkeSecurityParameterIndex ikeRespSpi =
-                IKE_SPI_GENERATOR.allocateSpi(REMOTE_ADDRESS, IKE_RESP_SPI);
+                spy(IKE_SPI_GENERATOR.allocateSpi(REMOTE_ADDRESS, IKE_RESP_SPI));
         IkeSaRecordConfig ikeSaRecordConfig =
                 new IkeSaRecordConfig(
                         ikeInitSpi,
@@ -221,9 +223,13 @@ public final class SaRecordTest {
         assertArrayEquals(
                 TestUtils.hexStringToByteArray(IKE_SK_PRF_RESP_HEX_STRING), ikeSaRecord.getSkPr());
         verify(mMockLifetimeAlarmScheduler).scheduleLifetimeExpiryAlarm(anyString());
+        verify(ikeInitSpi).bindToIkeSaRecord();
+        verify(ikeRespSpi).bindToIkeSaRecord();
 
         ikeSaRecord.close();
         verify(mMockLifetimeAlarmScheduler).cancelLifetimeExpiryAlarm(anyString());
+        verify(ikeInitSpi).unbindFromIkeSaRecord();
+        verify(ikeRespSpi).unbindFromIkeSaRecord();
     }
 
     // Test generating keying material and building IpSecTransform for making Child SA.
@@ -378,5 +384,30 @@ public final class SaRecordTest {
     @Test
     public void testRemoteInitChildKeyExchange() throws Exception {
         verifyChildKeyExchange(false /* isLocalInit */);
+    }
+
+    @Test
+    public void testBindIkeSpiToSaRecord() throws Exception {
+        IkeSecurityParameterIndex ikeInitSpi =
+                IKE_SPI_GENERATOR.allocateSpi(LOCAL_ADDRESS, IKE_INIT_SPI);
+
+        // Try closing SPI that is bound to an IKE SA
+        ikeInitSpi.bindToIkeSaRecord();
+        ikeInitSpi.close();
+
+        try {
+            IKE_SPI_GENERATOR.allocateSpi(LOCAL_ADDRESS, IKE_INIT_SPI);
+            fail("Expect to fail since this SPI-address combo is not released");
+        } catch (Exception expected) {
+        }
+
+        // Try closing SPI that is no longer bound to an IKE SA
+        ikeInitSpi.unbindFromIkeSaRecord();
+        ikeInitSpi.close();
+
+        IkeSecurityParameterIndex ikeInitSpiAnother =
+                IKE_SPI_GENERATOR.allocateSpi(LOCAL_ADDRESS, IKE_INIT_SPI);
+        assertEquals(LOCAL_ADDRESS, ikeInitSpiAnother.getSourceAddress());
+        assertEquals(IKE_INIT_SPI, ikeInitSpiAnother.getSpi());
     }
 }
