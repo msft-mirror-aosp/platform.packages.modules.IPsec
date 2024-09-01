@@ -564,7 +564,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                                 CMD_ALARM_FIRED,
                                 CMD_SEND_KEEPALIVE,
                                 this));
-        mIkeSpiGenerator = new IkeSpiGenerator(mIkeContext.getRandomnessFactory());
+        mIkeSpiGenerator = mDeps.newIkeSpiGenerator(mIkeContext.getRandomnessFactory());
         mIpSecSpiGenerator =
                 new IpSecSpiGenerator(mIpSecManager, mIkeContext.getRandomnessFactory());
 
@@ -797,6 +797,11 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
          */
         public IkeAlarm newExactAndAllowWhileIdleAlarm(IkeAlarmConfig alarmConfig) {
             return IkeAlarm.newExactAndAllowWhileIdleAlarm(alarmConfig);
+        }
+
+        /** Builds and returns a new IkeSpiGenerator */
+        public IkeSpiGenerator newIkeSpiGenerator(RandomnessFactory randomnessFactory) {
+            return new IkeSpiGenerator(randomnessFactory);
         }
     }
 
@@ -3333,13 +3338,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
         @Override
         protected void handleResponseIkeMessage(IkeMessage ikeMessage) {
-            // IKE_SA_INIT exchange and IKE SA setup succeed
-            boolean ikeInitSuccess = false;
-
-            // IKE INIT is not finished. IKE_SA_INIT request was re-sent with Notify-Cookie,
-            // and the same INIT SPI and other payloads.
-            boolean ikeInitRetriedWithCookie = false;
-
             try {
                 int exchangeType = ikeMessage.ikeHeader.exchangeType;
                 if (exchangeType != IkeHeader.EXCHANGE_TYPE_IKE_SA_INIT) {
@@ -3356,7 +3354,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                             buildReqWithCookie(mRetransmitter.getMessage(), outCookiePayload);
 
                     sendRequest(initReq);
-                    ikeInitRetriedWithCookie = true;
                     return;
                 }
 
@@ -3375,7 +3372,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                                 buildSaLifetimeAlarmScheduler(mRemoteIkeSpiResource.getSpi()));
 
                 addIkeSaRecord(mCurrentIkeSaRecord);
-                ikeInitSuccess = true;
 
                 List<Integer> integrityAlgorithms = mSaProposal.getIntegrityAlgorithms();
 
@@ -3439,17 +3435,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 }
 
                 handleIkeFatalError(e);
-            } finally {
-                if (!ikeInitSuccess && !ikeInitRetriedWithCookie) {
-                    if (mLocalIkeSpiResource != null) {
-                        mLocalIkeSpiResource.close();
-                        mLocalIkeSpiResource = null;
-                    }
-                    if (mRemoteIkeSpiResource != null) {
-                        mRemoteIkeSpiResource.close();
-                        mRemoteIkeSpiResource = null;
-                    }
-                }
             }
         }
 
@@ -3693,6 +3678,15 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             mInitialSetupData = null;
             if (mRetransmitter != null) {
                 mRetransmitter.stopRetransmitting();
+            }
+
+            if (mLocalIkeSpiResource != null) {
+                mLocalIkeSpiResource.close();
+                mLocalIkeSpiResource = null;
+            }
+            if (mRemoteIkeSpiResource != null) {
+                mRemoteIkeSpiResource.close();
+                mRemoteIkeSpiResource = null;
             }
         }
 
@@ -5024,15 +5018,29 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
     /** RekeyIkeLocalCreate represents state when IKE library initiates Rekey IKE exchange. */
     class RekeyIkeLocalCreate extends RekeyIkeHandlerBase {
+        private IkeMessage mRekeyRequestMsg;
+
         @Override
         public void enterState() {
             try {
-                mRetransmitter = new EncryptedRetransmitter(buildIkeRekeyReq());
+                mRekeyRequestMsg = buildIkeRekeyReq();
+                mRetransmitter = new EncryptedRetransmitter(mRekeyRequestMsg);
             } catch (IOException e) {
                 loge("Fail to assign IKE SPI for rekey. Schedule a retry.", e);
                 mCurrentIkeSaRecord.rescheduleRekey(RETRY_INTERVAL_MS);
                 transitionTo(mIdle);
             }
+        }
+
+        @Override
+        public void exitState() {
+            IkeSaPayload saPayload =
+                    mRekeyRequestMsg.getPayloadForType(
+                            IkePayload.PAYLOAD_TYPE_SA, IkeSaPayload.class);
+            if (saPayload != null) {
+                saPayload.releaseSpiResources();
+            }
+            mRekeyRequestMsg = null;
         }
 
         @Override
