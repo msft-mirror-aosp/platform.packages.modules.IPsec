@@ -27,7 +27,7 @@ android_test {
 
     compile_multilib: "both",
 
-    libs: ["android.test.runner"],
+    libs: ["android.test.runner.stubs"],
 
     test_config: "FrameworksIkeTests.xml",
 
