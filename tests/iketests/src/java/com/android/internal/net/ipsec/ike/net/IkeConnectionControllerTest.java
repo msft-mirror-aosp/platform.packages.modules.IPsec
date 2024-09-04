@@ -1094,6 +1094,20 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
     }
 
     @Test
+    public void testEnableIpv6MobilityWithNatNotChecked() throws Exception {
+        setupLocalAddressForNetwork(mMockDefaultNetwork, LOCAL_ADDRESS_V6);
+        setupRemoteAddressForNetwork(mMockDefaultNetwork, REMOTE_ADDRESS_V6);
+
+        mIkeConnectionCtrl = buildIkeConnectionCtrl();
+        mIkeConnectionCtrl.setUp();
+        mIkeConnectionCtrl.enableMobility();
+
+        assertTrue(mIkeConnectionCtrl.getIkeSocket() instanceof IkeUdp6Socket);
+        assertFalse(mIkeConnectionCtrl.getIkeSocket() instanceof IkeUdp6WithEncapPortSocket);
+        verifyKeepalive(false /* hasOldKeepalive */, false /* isKeepaliveExpected */);
+    }
+
+    @Test
     public void handleNatDetectionResultInMobike() throws Exception {
         mIkeConnectionCtrl.handleNatDetectionResultInMobike(true /* isNatDetected */);
 
