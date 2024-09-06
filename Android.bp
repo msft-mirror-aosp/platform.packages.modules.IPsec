@@ -56,6 +56,10 @@ java_sdk_library {
         "android.net.ipsec.ike.ike3gpp",
     ],
 
+    aconfig_declarations: [
+        "ipsec_aconfig_flags",
+    ],
+
     lint: {
         baseline_filename: "lint-baseline.xml",
     },
