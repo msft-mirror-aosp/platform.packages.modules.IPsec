@@ -37,8 +37,8 @@ java_sdk_library {
     libs: [
         "unsupportedappusage",
         "framework-annotations-lib",
-        "conscrypt.module.public.api",
-        "framework-configinfrastructure",
+        "conscrypt.module.public.api.stubs.module_lib",
+        "framework-configinfrastructure.stubs.module_lib",
         "framework-connectivity.stubs.module_lib",
         "framework-connectivity-t.stubs.module_lib",
         "framework-statsd.stubs.module_lib",
