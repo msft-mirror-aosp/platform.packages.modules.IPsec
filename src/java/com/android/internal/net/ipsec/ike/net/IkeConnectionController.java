@@ -1015,6 +1015,11 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
         return false;
     }
 
+    private boolean isNattSupported() {
+        return mNatStatus != NAT_TRAVERSAL_UNSUPPORTED
+                && mNatStatus != NAT_TRAVERSAL_SUPPORT_NOT_CHECKED;
+    }
+
     /**
      * Set the remote address for the peer.
      *
@@ -1108,7 +1113,7 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
     public void enableMobility() throws IkeException {
         mMobilityEnabled = true;
 
-        if (mNatStatus != NAT_TRAVERSAL_UNSUPPORTED
+        if (isNattSupported()
                 && mIkeSocket.getIkeServerPort() != IkeSocket.SERVER_PORT_UDP_ENCAPSULATED) {
             getAndSwitchToIkeSocket(
                     mRemoteAddress instanceof Inet4Address, true /* useEncapPort */);
@@ -1261,9 +1266,8 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
         boolean isIpv4 = mRemoteAddress instanceof Inet4Address;
 
         // If it is known that the server supports NAT-T, use port 4500. Otherwise, use port 500.
-        boolean nattSupported = mNatStatus != NAT_TRAVERSAL_UNSUPPORTED;
         int serverPort =
-                nattSupported
+                isNattSupported()
                         ? IkeSocket.SERVER_PORT_UDP_ENCAPSULATED
                         : IkeSocket.SERVER_PORT_NON_UDP_ENCAPSULATED;
 
@@ -1286,7 +1290,7 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
             }
 
             if (!mNetwork.equals(oldNetwork)) {
-                boolean useEncapPort = mForcePort4500 || nattSupported;
+                boolean useEncapPort = mForcePort4500 || isNattSupported();
                 getAndSwitchToIkeSocket(mLocalAddress instanceof Inet4Address, useEncapPort);
             }
 
