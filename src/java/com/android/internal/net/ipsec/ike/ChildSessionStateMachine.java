@@ -2473,7 +2473,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                     IkePayload.getPayloadForTypeInProvidedList(
                             IkePayload.PAYLOAD_TYPE_SA, IkeSaPayload.class, reqPayloads);
             if (saPayload != null) {
-                saPayload.releaseChildSpiResourcesIfExists();
+                saPayload.releaseSpiResources();
             }
         }
 
