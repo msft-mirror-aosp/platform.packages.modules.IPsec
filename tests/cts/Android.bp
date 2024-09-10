@@ -18,6 +18,7 @@ package {
 
 android_test {
     name: "CtsIkeTestCases",
+    team: "trendy_team_fwk_telephony",
     defaults: ["cts_defaults"],
 
     // Include both the 32 and 64 bit versions
