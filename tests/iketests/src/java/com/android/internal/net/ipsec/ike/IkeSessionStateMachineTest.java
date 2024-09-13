@@ -153,6 +153,7 @@ import android.net.ipsec.test.ike.ike3gpp.Ike3gppExtension;
 import android.net.ipsec.test.ike.ike3gpp.Ike3gppExtension.Ike3gppDataListener;
 import android.net.ipsec.test.ike.ike3gpp.Ike3gppN1ModeInformation;
 import android.net.ipsec.test.ike.ike3gpp.Ike3gppParams;
+import android.os.Handler;
 import android.os.test.TestLooper;
 import android.telephony.TelephonyManager;
 
@@ -450,6 +451,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     private EapAuthenticator mMockEapAuthenticator;
 
     private IkeConnectionController mSpyIkeConnectionCtrl;
+    private IkeSpiGenerator mSpyIkeSpiGenerator;
 
     private Ike3gppDataListener mMockIke3gppDataListener;
     private Ike3gppExtension mIke3gppExtension;
@@ -891,6 +893,9 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                 .when(spyDeps)
                 .newIkeConnectionController(
                         any(IkeContext.class), any(IkeConnectionController.Config.class));
+        doReturn(mSpyIkeSpiGenerator)
+                .when(spyDeps)
+                .newIkeSpiGenerator(any(RandomnessFactory.class));
         injectChildSessionInSpyDeps(spyDeps, child, childCb);
 
 
@@ -989,12 +994,16 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                         new IkeConnectionController(
                                 ikeContext,
                                 new IkeConnectionController.Config(
+                                        new Handler(mLooper.getLooper()),
                                         ikeParams,
                                         FAKE_SESSION_ID,
                                         CMD_ALARM_FIRED,
                                         CMD_SEND_KEEPALIVE,
                                         mockIkeConnectionCtrlCb),
                                 spyIkeConnectionCtrlDeps));
+
+        mSpyIkeSpiGenerator = spy(new IkeSpiGenerator(createMockRandomFactory()));
+
         mSpyDeps =
                 buildSpyDepsWithChildSession(
                         mMockChildSessionStateMachine, mMockChildSessionCallback);
@@ -1016,6 +1025,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         ikeSession.setDbg(true);
 
         mLooper.dispatchAll();
+
         mMockCurrentIkeSocket = mSpyIkeConnectionCtrl.getIkeSocket();
         assertEquals(expectedRemoteAddress, mSpyIkeConnectionCtrl.getRemoteAddress());
 
@@ -1721,6 +1731,48 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         IkeKePayload kePayload =
                 reqMsg.getPayloadForType(IkePayload.PAYLOAD_TYPE_KE, IkeKePayload.class);
         assertEquals(expectedDhGroup, kePayload.dhGroup);
+    }
+
+    @Test
+    public void testCreateIkeLocalIkeInit_closeSpi_ikeTerminated() throws Exception {
+        // Setup
+        final IkeSecurityParameterIndex mockIkeSpi = mock(IkeSecurityParameterIndex.class);
+        doReturn(mockIkeSpi).when(mSpyIkeSpiGenerator).allocateSpi(any(InetAddress.class));
+
+        // Send out IKE INIT request
+        mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_LOCAL_REQUEST_CREATE_IKE);
+        mLooper.dispatchAll();
+
+        // Verifications
+        verify(mSpyIkeSpiGenerator).allocateSpi(any(InetAddress.class));
+
+        mIkeSessionStateMachine.killSession();
+        mLooper.dispatchAll();
+
+        verify(mockIkeSpi).close();
+    }
+
+    @Test
+    public void testRekeyIkeLocalCreate_closeSpi_ikeTerminated() throws Exception {
+        // Setup
+        setupIdleStateMachine();
+        final IkeSecurityParameterIndex mockIkeSpi = mock(IkeSecurityParameterIndex.class);
+        doReturn(mockIkeSpi).when(mSpyIkeSpiGenerator).allocateSpi(any(InetAddress.class));
+
+        // Send Rekey-Create request
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_EXECUTE_LOCAL_REQ,
+                mLocalRequestFactory.getIkeLocalRequest(
+                        IkeSessionStateMachine.CMD_LOCAL_REQUEST_REKEY_IKE));
+        mLooper.dispatchAll();
+
+        // Verifications
+        verify(mSpyIkeSpiGenerator).allocateSpi(any(InetAddress.class));
+
+        mIkeSessionStateMachine.killSession();
+        mLooper.dispatchAll();
+
+        verify(mockIkeSpi).close();
     }
 
     @Test

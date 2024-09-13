@@ -256,6 +256,7 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
 
     /** Config includes all configurations to build an IkeConnectionController */
     public static class Config {
+        public final Handler ikeHandler;
         public final IkeSessionParams ikeParams;
         public final int ikeSessionId;
         public final int alarmCmd;
@@ -264,11 +265,13 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
 
         /** Constructor for IkeConnectionController.Config */
         public Config(
+                Handler ikeHandler,
                 IkeSessionParams ikeParams,
                 int ikeSessionId,
                 int alarmCmd,
                 int sendKeepaliveCmd,
                 Callback callback) {
+            this.ikeHandler = ikeHandler;
             this.ikeParams = ikeParams;
             this.ikeSessionId = ikeSessionId;
             this.alarmCmd = alarmCmd;
@@ -386,15 +389,15 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
     }
 
     private static IkeAlarmConfig buildInitialKeepaliveAlarmConfig(
-            Handler handler,
             IkeContext ikeContext,
             Config config,
             IkeSessionParams ikeParams,
             NetworkCapabilities nc) {
-        final Message keepaliveMsg = handler.obtainMessage(
-                config.alarmCmd /* what */,
-                config.ikeSessionId /* arg1 */,
-                config.sendKeepaliveCmd /* arg2 */);
+        final Message keepaliveMsg =
+                config.ikeHandler.obtainMessage(
+                        config.alarmCmd /* what */,
+                        config.ikeSessionId /* arg1 */,
+                        config.sendKeepaliveCmd /* arg2 */);
         final PendingIntent keepaliveIntent = IkeAlarm.buildIkeAlarmIntent(ikeContext.getContext(),
                 ACTION_KEEPALIVE, getIntentIdentifier(config.ikeSessionId), keepaliveMsg);
 
@@ -507,8 +510,8 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
         // mixing callbacks and synchronous polling methods.
         LinkProperties linkProperties = mConnectivityManager.getLinkProperties(mNetwork);
         mNc = mConnectivityManager.getNetworkCapabilities(mNetwork);
-        mKeepaliveAlarmConfig = buildInitialKeepaliveAlarmConfig(
-                new Handler(mIkeContext.getLooper()), mIkeContext, mConfig, mIkeParams, mNc);
+        mKeepaliveAlarmConfig =
+                buildInitialKeepaliveAlarmConfig(mIkeContext, mConfig, mIkeParams, mNc);
         try {
             if (linkProperties == null || mNc == null) {
                 // Throw NPE to preserve the existing behaviour for backward compatibility
@@ -1015,6 +1018,11 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
         return false;
     }
 
+    private boolean isNattSupported() {
+        return mNatStatus != NAT_TRAVERSAL_UNSUPPORTED
+                && mNatStatus != NAT_TRAVERSAL_SUPPORT_NOT_CHECKED;
+    }
+
     /**
      * Set the remote address for the peer.
      *
@@ -1108,7 +1116,7 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
     public void enableMobility() throws IkeException {
         mMobilityEnabled = true;
 
-        if (mNatStatus != NAT_TRAVERSAL_UNSUPPORTED
+        if (isNattSupported()
                 && mIkeSocket.getIkeServerPort() != IkeSocket.SERVER_PORT_UDP_ENCAPSULATED) {
             getAndSwitchToIkeSocket(
                     mRemoteAddress instanceof Inet4Address, true /* useEncapPort */);
@@ -1261,9 +1269,8 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
         boolean isIpv4 = mRemoteAddress instanceof Inet4Address;
 
         // If it is known that the server supports NAT-T, use port 4500. Otherwise, use port 500.
-        boolean nattSupported = mNatStatus != NAT_TRAVERSAL_UNSUPPORTED;
         int serverPort =
-                nattSupported
+                isNattSupported()
                         ? IkeSocket.SERVER_PORT_UDP_ENCAPSULATED
                         : IkeSocket.SERVER_PORT_NON_UDP_ENCAPSULATED;
 
@@ -1286,7 +1293,7 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
             }
 
             if (!mNetwork.equals(oldNetwork)) {
-                boolean useEncapPort = mForcePort4500 || nattSupported;
+                boolean useEncapPort = mForcePort4500 || isNattSupported();
                 getAndSwitchToIkeSocket(mLocalAddress instanceof Inet4Address, useEncapPort);
             }
 
