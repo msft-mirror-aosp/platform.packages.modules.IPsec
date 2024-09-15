@@ -153,6 +153,7 @@ import android.net.ipsec.test.ike.ike3gpp.Ike3gppExtension;
 import android.net.ipsec.test.ike.ike3gpp.Ike3gppExtension.Ike3gppDataListener;
 import android.net.ipsec.test.ike.ike3gpp.Ike3gppN1ModeInformation;
 import android.net.ipsec.test.ike.ike3gpp.Ike3gppParams;
+import android.os.Handler;
 import android.os.test.TestLooper;
 import android.telephony.TelephonyManager;
 
@@ -993,12 +994,14 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                         new IkeConnectionController(
                                 ikeContext,
                                 new IkeConnectionController.Config(
+                                        new Handler(mLooper.getLooper()),
                                         ikeParams,
                                         FAKE_SESSION_ID,
                                         CMD_ALARM_FIRED,
                                         CMD_SEND_KEEPALIVE,
                                         mockIkeConnectionCtrlCb),
                                 spyIkeConnectionCtrlDeps));
+
         mSpyIkeSpiGenerator = spy(new IkeSpiGenerator(createMockRandomFactory()));
 
         mSpyDeps =
@@ -1022,6 +1025,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         ikeSession.setDbg(true);
 
         mLooper.dispatchAll();
+
         mMockCurrentIkeSocket = mSpyIkeConnectionCtrl.getIkeSocket();
         assertEquals(expectedRemoteAddress, mSpyIkeConnectionCtrl.getRemoteAddress());
 

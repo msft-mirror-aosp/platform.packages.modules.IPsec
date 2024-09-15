@@ -559,6 +559,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 mDeps.newIkeConnectionController(
                         mIkeContext,
                         new IkeConnectionController.Config(
+                                getHandler(),
                                 mIkeSessionParams,
                                 mIkeSessionId,
                                 CMD_ALARM_FIRED,
