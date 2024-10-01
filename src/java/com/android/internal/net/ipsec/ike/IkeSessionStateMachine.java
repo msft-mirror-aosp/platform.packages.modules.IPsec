@@ -6218,8 +6218,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
     // This call will be only fired when mIkeConnectionCtrl.isMobilityEnabled() is true
     @Override
     public void onUnderlyingNetworkUpdated() {
-        // Send event for mobility.
-        sendMessage(CMD_UNDERLYING_NETWORK_UPDATED_WITH_MOBILITY);
+        if (ShimUtils.getInstance().suspendOnNetworkLossEnabled()) {
+            // Send event for mobility.
+            sendMessage(CMD_UNDERLYING_NETWORK_UPDATED_WITH_MOBILITY);
+        }
 
         // UPDATE_SA
         sendMessage(
@@ -6230,8 +6232,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
     @Override
     public void onUnderlyingNetworkDied(Network network) {
         if (mIkeConnectionCtrl.isMobilityEnabled()) {
-            // Send event for mobility.
-            sendMessage(CMD_UNDERLYING_NETWORK_DIED_WITH_MOBILITY);
+            if (ShimUtils.getInstance().suspendOnNetworkLossEnabled()) {
+                // Send event for mobility.
+                sendMessage(CMD_UNDERLYING_NETWORK_DIED_WITH_MOBILITY);
+            }
 
             // Do not tear down the session because 1) callers might want to migrate the IKE Session
             // when another network is available; 2) the termination from IKE Session might be
