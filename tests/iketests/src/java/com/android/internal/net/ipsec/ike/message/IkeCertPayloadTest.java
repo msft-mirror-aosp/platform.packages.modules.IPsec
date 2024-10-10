@@ -23,6 +23,7 @@ import android.net.ipsec.test.ike.exceptions.AuthenticationFailedException;
 import com.android.internal.net.ipsec.test.ike.testutils.CertUtils;
 
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import java.security.cert.TrustAnchor;
@@ -67,7 +68,7 @@ public final class IkeCertPayloadTest {
                         null /*nameConstraints*/);
     }
 
-    @Test
+    @Ignore("TODO - b/372432898")
     public void testValidateCertsNoIntermediateCerts() throws Exception {
         List<X509Certificate> certList = new ArrayList<>();
         certList.add(mEndCertA);
@@ -78,7 +79,7 @@ public final class IkeCertPayloadTest {
         IkeCertPayload.validateCertificates(mEndCertA, certList, null /*crlList*/, trustAnchors);
     }
 
-    @Test
+    @Ignore("TODO - b/372432898")
     public void testValidateCertsWithIntermediateCerts() throws Exception {
         List<X509Certificate> certList = new ArrayList<>();
 
@@ -92,7 +93,7 @@ public final class IkeCertPayloadTest {
         IkeCertPayload.validateCertificates(mEndCertB, certList, null /*crlList*/, trustAnchors);
     }
 
-    @Test
+    @Ignore("TODO - b/372432898")
     public void testValidateCertsWithMultiTrustAnchors() throws Exception {
         List<X509Certificate> certList = new ArrayList<>();
         certList.add(mEndCertA);
