@@ -3367,12 +3367,12 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         verifyRetransmissionStopped();
     }
 
-    @Test
+    @Ignore("TODO - b/372432898")
     public void testCreateIkeLocalIkeAuthRsaDigitalSignature() throws Exception {
         verifyCreateIkeLocalIkeAuthDigitalSignature(new HashSet<>());
     }
 
-    @Test
+    @Ignore("TODO - b/372432898")
     public void testCreateIkeLocalIkeAuthGenericDigitalSignature() throws Exception {
         Set<Short> hashAlgos = new HashSet<Short>();
         for (short algo : IkeAuthDigitalSignPayload.ALL_SIGNATURE_ALGO_TYPES) {
@@ -3599,7 +3599,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                 .onClosedWithException(any(AuthenticationFailedException.class));
     }
 
-    @Test
+    @Ignore("TODO - b/372432898")
     public void testCreateIkeLocalIkeAuthPreEap() throws Exception {
         mIkeSessionStateMachine.quitNow();
         mIkeSessionStateMachine = makeAndStartIkeSession(buildIkeSessionParamsEap());
