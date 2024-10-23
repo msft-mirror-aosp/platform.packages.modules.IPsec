@@ -117,6 +117,7 @@ java_library {
         "bouncycastle_ike_digests",
         "modules-utils-build",
         "modules-utils-statemachine",
+        "net-utils-framework-ipsec",
     ],
     sdk_version: "module_current",
 }
