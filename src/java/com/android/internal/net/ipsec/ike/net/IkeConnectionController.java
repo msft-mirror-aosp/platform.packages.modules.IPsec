@@ -256,6 +256,7 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
 
     /** Config includes all configurations to build an IkeConnectionController */
     public static class Config {
+        public final Handler ikeHandler;
         public final IkeSessionParams ikeParams;
         public final int ikeSessionId;
         public final int alarmCmd;
@@ -264,11 +265,13 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
 
         /** Constructor for IkeConnectionController.Config */
         public Config(
+                Handler ikeHandler,
                 IkeSessionParams ikeParams,
                 int ikeSessionId,
                 int alarmCmd,
                 int sendKeepaliveCmd,
                 Callback callback) {
+            this.ikeHandler = ikeHandler;
             this.ikeParams = ikeParams;
             this.ikeSessionId = ikeSessionId;
             this.alarmCmd = alarmCmd;
@@ -386,15 +389,15 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
     }
 
     private static IkeAlarmConfig buildInitialKeepaliveAlarmConfig(
-            Handler handler,
             IkeContext ikeContext,
             Config config,
             IkeSessionParams ikeParams,
             NetworkCapabilities nc) {
-        final Message keepaliveMsg = handler.obtainMessage(
-                config.alarmCmd /* what */,
-                config.ikeSessionId /* arg1 */,
-                config.sendKeepaliveCmd /* arg2 */);
+        final Message keepaliveMsg =
+                config.ikeHandler.obtainMessage(
+                        config.alarmCmd /* what */,
+                        config.ikeSessionId /* arg1 */,
+                        config.sendKeepaliveCmd /* arg2 */);
         final PendingIntent keepaliveIntent = IkeAlarm.buildIkeAlarmIntent(ikeContext.getContext(),
                 ACTION_KEEPALIVE, getIntentIdentifier(config.ikeSessionId), keepaliveMsg);
 
@@ -507,8 +510,8 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
         // mixing callbacks and synchronous polling methods.
         LinkProperties linkProperties = mConnectivityManager.getLinkProperties(mNetwork);
         mNc = mConnectivityManager.getNetworkCapabilities(mNetwork);
-        mKeepaliveAlarmConfig = buildInitialKeepaliveAlarmConfig(
-                new Handler(mIkeContext.getLooper()), mIkeContext, mConfig, mIkeParams, mNc);
+        mKeepaliveAlarmConfig =
+                buildInitialKeepaliveAlarmConfig(mIkeContext, mConfig, mIkeParams, mNc);
         try {
             if (linkProperties == null || mNc == null) {
                 // Throw NPE to preserve the existing behaviour for backward compatibility
