@@ -16,10 +16,15 @@
 
 package com.android.internal.net.ipsec.ike.shim;
 
-/** Shim utilities for SDK V and above */
-public class ShimUtilsMinV extends ShimUtilsU {
+/** Shim utilities for SDK W and above */
+public class ShimUtilsMinW extends ShimUtilsU {
     // Package protected constructor for ShimUtils to access
-    ShimUtilsMinV() {
+    ShimUtilsMinW() {
         super();
+    }
+
+    @Override
+    public boolean suspendOnNetworkLossEnabled() {
+        return true;
     }
 }
