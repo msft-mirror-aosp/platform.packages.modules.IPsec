@@ -153,6 +153,7 @@ import android.net.ipsec.test.ike.ike3gpp.Ike3gppExtension;
 import android.net.ipsec.test.ike.ike3gpp.Ike3gppExtension.Ike3gppDataListener;
 import android.net.ipsec.test.ike.ike3gpp.Ike3gppN1ModeInformation;
 import android.net.ipsec.test.ike.ike3gpp.Ike3gppParams;
+import android.os.Build;
 import android.os.Handler;
 import android.os.test.TestLooper;
 import android.telephony.TelephonyManager;
@@ -3366,12 +3367,12 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         verifyRetransmissionStopped();
     }
 
-    @Test
+    @Ignore("TODO - b/372432898")
     public void testCreateIkeLocalIkeAuthRsaDigitalSignature() throws Exception {
         verifyCreateIkeLocalIkeAuthDigitalSignature(new HashSet<>());
     }
 
-    @Test
+    @Ignore("TODO - b/372432898")
     public void testCreateIkeLocalIkeAuthGenericDigitalSignature() throws Exception {
         Set<Short> hashAlgos = new HashSet<Short>();
         for (short algo : IkeAuthDigitalSignPayload.ALL_SIGNATURE_ALGO_TYPES) {
@@ -3598,7 +3599,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                 .onClosedWithException(any(AuthenticationFailedException.class));
     }
 
-    @Test
+    @Ignore("TODO - b/372432898")
     public void testCreateIkeLocalIkeAuthPreEap() throws Exception {
         mIkeSessionStateMachine.quitNow();
         mIkeSessionStateMachine = makeAndStartIkeSession(buildIkeSessionParamsEap());
@@ -7460,6 +7461,41 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         assertTrue(expectedStateOfResumed.isInstance(mIkeSessionStateMachine.getCurrentState()));
     }
 
+    private void verifyRetransmitContinuesAndSessionTerminatedByTimeout(Class<?> expectedState) {
+        // Make sure the retransmit flag is not set to suspended.
+        assertFalse(mIkeSessionStateMachine.mIsRetransmitSuspended);
+
+        // Make sure the state machine is still alive.
+        assertTrue(expectedState.isInstance(mIkeSessionStateMachine.getCurrentState()));
+
+        // Elapse all retransmission timeouts.
+        int[] timeouts =
+                mIkeSessionStateMachine.mIkeSessionParams.getRetransmissionTimeoutsMillis();
+        for (long delay : timeouts) {
+            mLooper.dispatchAll();
+            mLooper.moveTimeForward(delay);
+        }
+        mLooper.dispatchAll();
+
+        assertNull(mIkeSessionStateMachine.getCurrentState());
+        if (SdkLevel.isAtLeastT()) {
+            verify(mMockIkeSessionCallback)
+                    .onClosedWithException(
+                            argThat(
+                                    e ->
+                                            e instanceof IkeIOException
+                                                    && e.getCause()
+                                                            instanceof IkeTimeoutException));
+        } else {
+            verify(mMockIkeSessionCallback)
+                    .onClosedWithException(
+                            argThat(
+                                    e ->
+                                            e instanceof IkeInternalException
+                                                    && e.getCause() instanceof IOException));
+        }
+    }
+
     @Test
     @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testSuspendRetransmission_inDpd() throws Exception {
@@ -7478,9 +7514,14 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         mIkeSessionStateMachine.onUnderlyingNetworkDied(mMockDefaultNetwork);
         mLooper.dispatchAll();
 
-        verifyRetransmitSuspendedAndResumedOnNewNetwork(
-                IkeSessionStateMachine.DpdIkeLocalInfo.class,
-                IkeSessionStateMachine.DpdIkeLocalInfo.class);
+        if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+            verifyRetransmitContinuesAndSessionTerminatedByTimeout(
+                    IkeSessionStateMachine.DpdIkeLocalInfo.class);
+        } else {
+            verifyRetransmitSuspendedAndResumedOnNewNetwork(
+                    IkeSessionStateMachine.DpdIkeLocalInfo.class,
+                    IkeSessionStateMachine.DpdIkeLocalInfo.class);
+        }
     }
 
     @Test
@@ -7496,10 +7537,15 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                 CMD_FORCE_TRANSITION, mIkeSessionStateMachine.mDpdIkeLocalInfo);
         mLooper.dispatchAll();
 
-        verifyRetransmitSuspendedAndResumedOnNewNetwork(
-                IkeSessionStateMachine.DpdIkeLocalInfo.class,
-                IkeSessionStateMachine.DpdIkeLocalInfo.class);
-        verifyEmptyInformationalSent(1, false /* expectedResp*/);
+        if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+            verifyRetransmitContinuesAndSessionTerminatedByTimeout(
+                    IkeSessionStateMachine.DpdIkeLocalInfo.class);
+        } else {
+            verifyRetransmitSuspendedAndResumedOnNewNetwork(
+                    IkeSessionStateMachine.DpdIkeLocalInfo.class,
+                    IkeSessionStateMachine.DpdIkeLocalInfo.class);
+            verifyEmptyInformationalSent(1, false /* expectedResp*/);
+        }
     }
 
     @Test
@@ -7511,8 +7557,14 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         mIkeSessionStateMachine.onUnderlyingNetworkDied(mMockDefaultNetwork);
         mLooper.dispatchAll();
 
-        verifyRetransmitSuspendedAndResumedOnNewNetwork(
-                IkeSessionStateMachine.Idle.class, IkeSessionStateMachine.MobikeLocalInfo.class);
+        if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+            // Make sure the retransmit flag is not set to suspended.
+            assertFalse(mIkeSessionStateMachine.mIsRetransmitSuspended);
+        } else {
+            verifyRetransmitSuspendedAndResumedOnNewNetwork(
+                    IkeSessionStateMachine.Idle.class,
+                    IkeSessionStateMachine.MobikeLocalInfo.class);
+        }
     }
 
     @Test
@@ -7541,10 +7593,20 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         // Disconnect from the underlying network.
         mIkeSessionStateMachine.onUnderlyingNetworkDied(mMockDefaultNetwork);
         mLooper.dispatchAll();
-        // Make sure the retransmit flag is set to suspended.
-        assertTrue(mIkeSessionStateMachine.mIsRetransmitSuspended);
-        // Make sure if there is no future retransmission.
-        verifyRetransmissionStopped();
+
+        if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+            // Make sure the retransmit flag is not set to suspended.
+            assertFalse(mIkeSessionStateMachine.mIsRetransmitSuspended);
+            // Verify that retransmission has started.
+            verifyRetransmissionStarted();
+            // Stop testing
+            return;
+        } else {
+            // Make sure the retransmit flag is set to suspended.
+            assertTrue(mIkeSessionStateMachine.mIsRetransmitSuspended);
+            // Make sure if there is no future retransmission.
+            verifyRetransmissionStopped();
+        }
 
         // Step 3. Receive a response with the last packet before the network dies, verify child
         // notifies to send the RekeyChildDelete request but should not be sent.

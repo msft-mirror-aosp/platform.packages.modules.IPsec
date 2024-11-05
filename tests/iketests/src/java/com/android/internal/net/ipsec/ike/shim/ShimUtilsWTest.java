@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 The Android Open Source Project
+ * Copyright (C) 2024 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,25 +18,14 @@ package com.android.internal.net.ipsec.test.ike.shim;
 
 import static org.junit.Assert.assertTrue;
 
-import android.os.Build;
-
-import com.android.modules.utils.build.SdkLevel;
-
 import org.junit.Test;
 
-public class ShimUtilsTest {
+public class ShimUtilsWTest {
+    private ShimUtilsT mShim = new ShimUtilsMinW();
+
     @Test
-    public void testGetInstance() {
-        final ShimUtils shim = ShimUtils.getInstance();
-        assertTrue(shim instanceof ShimUtils);
-        if (Build.VERSION.SDK_INT > Build.VERSION_CODES.VANILLA_ICE_CREAM) {
-            assertTrue(shim instanceof ShimUtilsMinW);
-        } else if (SdkLevel.isAtLeastU()) {
-            assertTrue(shim instanceof ShimUtilsU);
-        } else if (SdkLevel.isAtLeastT()) {
-            assertTrue(shim instanceof ShimUtilsT);
-        } else {
-            assertTrue(shim instanceof ShimUtilsRAndS);
-        }
+    public void testSuspendOnNetworkLossEnabled() {
+        boolean enabled = mShim.suspendOnNetworkLossEnabled();
+        assertTrue(enabled);
     }
 }
