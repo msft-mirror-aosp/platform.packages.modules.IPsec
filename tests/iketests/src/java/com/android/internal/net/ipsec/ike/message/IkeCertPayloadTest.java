@@ -23,7 +23,6 @@ import android.net.ipsec.test.ike.exceptions.AuthenticationFailedException;
 import com.android.internal.net.ipsec.test.ike.testutils.CertUtils;
 
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Test;
 
 import java.security.cert.TrustAnchor;
@@ -61,14 +60,14 @@ public final class IkeCertPayloadTest {
                         CertUtils.createCertFromPemFile("self-signed-ca-b.pem"),
                         null /*nameConstraints*/);
 
-        mEndCertSmall = CertUtils.createCertFromPemFile("end-cert-small.pem");
+        mEndCertSmall = CertUtils.createCertFromPemFile("end-cert-small-2.pem");
         mTrustAnchorSmall =
                 new TrustAnchor(
-                        CertUtils.createCertFromPemFile("self-signed-ca-small.pem"),
+                        CertUtils.createCertFromPemFile("self-signed-ca-small-2.pem"),
                         null /*nameConstraints*/);
     }
 
-    @Ignore("TODO - b/372432898")
+    @Test
     public void testValidateCertsNoIntermediateCerts() throws Exception {
         List<X509Certificate> certList = new ArrayList<>();
         certList.add(mEndCertA);
@@ -79,7 +78,7 @@ public final class IkeCertPayloadTest {
         IkeCertPayload.validateCertificates(mEndCertA, certList, null /*crlList*/, trustAnchors);
     }
 
-    @Ignore("TODO - b/372432898")
+    @Test
     public void testValidateCertsWithIntermediateCerts() throws Exception {
         List<X509Certificate> certList = new ArrayList<>();
 
@@ -93,7 +92,7 @@ public final class IkeCertPayloadTest {
         IkeCertPayload.validateCertificates(mEndCertB, certList, null /*crlList*/, trustAnchors);
     }
 
-    @Ignore("TODO - b/372432898")
+    @Test
     public void testValidateCertsWithMultiTrustAnchors() throws Exception {
         List<X509Certificate> certList = new ArrayList<>();
         certList.add(mEndCertA);
