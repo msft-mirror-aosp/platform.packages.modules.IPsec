@@ -34,6 +34,7 @@ import android.net.ConnectivityManager;
 import android.net.Network;
 import android.net.eap.EapSessionConfig;
 import android.net.ipsec.ike.ike3gpp.Ike3gppExtension;
+import android.net.vcn.util.PersistableBundleUtils;
 import android.os.PersistableBundle;
 import android.util.SparseArray;
 
@@ -44,7 +45,6 @@ import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttribu
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.IkeConfigAttribute;
 import com.android.internal.net.ipsec.ike.message.IkePayload;
 import com.android.modules.utils.build.SdkLevel;
-import com.android.server.vcn.util.PersistableBundleUtils;
 
 import java.io.PrintWriter;
 import java.lang.annotation.Retention;

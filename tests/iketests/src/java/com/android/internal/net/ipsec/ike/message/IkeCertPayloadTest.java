@@ -60,10 +60,10 @@ public final class IkeCertPayloadTest {
                         CertUtils.createCertFromPemFile("self-signed-ca-b.pem"),
                         null /*nameConstraints*/);
 
-        mEndCertSmall = CertUtils.createCertFromPemFile("end-cert-small.pem");
+        mEndCertSmall = CertUtils.createCertFromPemFile("end-cert-small-2.pem");
         mTrustAnchorSmall =
                 new TrustAnchor(
-                        CertUtils.createCertFromPemFile("self-signed-ca-small.pem"),
+                        CertUtils.createCertFromPemFile("self-signed-ca-small-2.pem"),
                         null /*nameConstraints*/);
     }
 

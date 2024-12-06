@@ -100,7 +100,7 @@ public final class IkeIdPayloadTest {
     @BeforeClass
     public static void setUpBeforeClass() throws Exception {
         sEndCertWithSanDns = CertUtils.createCertFromPemFile("end-cert-a.pem");
-        sEndCertWithSanIp = CertUtils.createCertFromPemFile("end-cert-small.pem");
+        sEndCertWithSanIp = CertUtils.createCertFromPemFile("end-cert-small-2.pem");
     }
 
     @Test
