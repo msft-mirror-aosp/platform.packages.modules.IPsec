@@ -169,11 +169,11 @@ abstract class IkeSessionTestBase extends IkeTestNetworkBase {
         for (String pkg : new String[] {"com.android.shell", sContext.getPackageName()}) {
             String cmd =
                     String.format(
-                            "appops set %s %s %s --user %d",
+                            "appops set --user %d %s %s %s",
+                            UserHandle.myUserId(), // user id
                             pkg, // Package name
                             opName, // Appop
-                            (allow ? "allow" : "deny"), // Action
-                            UserHandle.myUserId());
+                            (allow ? "allow" : "deny")); // Action
 
             SystemUtil.runShellCommand(cmd);
         }

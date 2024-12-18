@@ -37,8 +37,8 @@ java_sdk_library {
     libs: [
         "unsupportedappusage",
         "framework-annotations-lib",
-        "conscrypt.module.public.api",
-        "framework-configinfrastructure",
+        "conscrypt.module.public.api.stubs.module_lib",
+        "framework-configinfrastructure.stubs.module_lib",
         "framework-connectivity.stubs.module_lib",
         "framework-connectivity-t.stubs.module_lib",
         "framework-statsd.stubs.module_lib",
@@ -54,6 +54,10 @@ java_sdk_library {
         "android.net.ipsec.ike.exceptions",
         "android.net.ipsec.ike.exceptions.protocol",
         "android.net.ipsec.ike.ike3gpp",
+    ],
+
+    aconfig_declarations: [
+        "ipsec_aconfig_flags",
     ],
 
     lint: {
@@ -113,6 +117,7 @@ java_library {
         "bouncycastle_ike_digests",
         "modules-utils-build",
         "modules-utils-statemachine",
+        "net-utils-framework-ipsec",
     ],
     sdk_version: "module_current",
 }
@@ -123,7 +128,7 @@ java_library {
     srcs: [":ike-srcs"],
     libs: [
         "unsupportedappusage",
-        "conscrypt.module.public.api",
+        "conscrypt.module.public.api.stubs",
     ],
     static_libs: ["ike-internals"],
 

@@ -1,4 +1,12 @@
 {
+  "ipsec-mainline-presubmit": [
+    {
+      "name": "FrameworksIkeTests"
+    },
+    {
+      "name": "CtsIkeTestCases"
+    }
+  ],
   "mainline-presubmit": [
     {
       "name": "FrameworksIkeTests[com.google.android.ipsec.apex]"

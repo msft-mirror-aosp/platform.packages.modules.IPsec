@@ -77,6 +77,7 @@ import android.net.ipsec.test.ike.exceptions.IkeException;
 import android.net.ipsec.test.ike.exceptions.IkeIOException;
 import android.net.ipsec.test.ike.exceptions.IkeInternalException;
 import android.os.Build.VERSION_CODES;
+import android.os.Handler;
 import android.os.Looper;
 
 import com.android.internal.net.TestUtils;
@@ -127,6 +128,7 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
 
     private static final int KEEPALIVE_DELAY_CALLER_CONFIGURED = 50;
 
+    private Handler mIkeHandler;
     private IkeSessionParams mMockIkeParams;
     private IkeAlarmConfig mMockAlarmConfig;
     private IkeNattKeepalive mMockIkeNattKeepalive;
@@ -144,6 +146,7 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
     private IkeConnectionController mIkeConnectionCtrl;
 
     private IkeConnectionController buildIkeConnectionCtrl() throws Exception {
+        mIkeHandler = new Handler(mIkeContext.getLooper());
         mMockConnectionCtrlCb = mock(IkeConnectionController.Callback.class);
         mMockConnectionCtrlDeps = mock(IkeConnectionController.Dependencies.class);
 
@@ -168,7 +171,11 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
         return new IkeConnectionController(
                 mIkeContext,
                 new IkeConnectionController.Config(
-                        mMockIkeParams, FAKE_SESSION_ID, MOCK_ALARM_CMD, MOCK_KEEPALIVE_CMD,
+                        mIkeHandler,
+                        mMockIkeParams,
+                        FAKE_SESSION_ID,
+                        MOCK_ALARM_CMD,
+                        MOCK_KEEPALIVE_CMD,
                         mMockConnectionCtrlCb),
                 mMockConnectionCtrlDeps);
     }
@@ -1090,6 +1097,20 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
         enableMobilityAndReturnCb(true /* isDefaultNetwork */);
 
         assertTrue(mIkeConnectionCtrl.getIkeSocket() instanceof IkeUdp4Socket);
+        verifyKeepalive(false /* hasOldKeepalive */, false /* isKeepaliveExpected */);
+    }
+
+    @Test
+    public void testEnableIpv6MobilityWithNatNotChecked() throws Exception {
+        setupLocalAddressForNetwork(mMockDefaultNetwork, LOCAL_ADDRESS_V6);
+        setupRemoteAddressForNetwork(mMockDefaultNetwork, REMOTE_ADDRESS_V6);
+
+        mIkeConnectionCtrl = buildIkeConnectionCtrl();
+        mIkeConnectionCtrl.setUp();
+        mIkeConnectionCtrl.enableMobility();
+
+        assertTrue(mIkeConnectionCtrl.getIkeSocket() instanceof IkeUdp6Socket);
+        assertFalse(mIkeConnectionCtrl.getIkeSocket() instanceof IkeUdp6WithEncapPortSocket);
         verifyKeepalive(false /* hasOldKeepalive */, false /* isKeepaliveExpected */);
     }
 
