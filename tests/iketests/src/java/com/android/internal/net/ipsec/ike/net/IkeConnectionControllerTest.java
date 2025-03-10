@@ -112,6 +112,7 @@ import java.net.Inet4Address;
 import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.util.HashSet;
+import java.util.concurrent.TimeUnit;
 
 public class IkeConnectionControllerTest extends IkeSessionTestBase {
     @Rule public final DevSdkIgnoreRule ignoreRule = new DevSdkIgnoreRule();
@@ -217,7 +218,9 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
 
         mIkeConnectionCtrl = buildIkeConnectionCtrl();
         mIkeConnectionCtrl.setUp();
-        verify(mMockIkeParams).getNattKeepAliveDelaySeconds();
+        // getNattKeepAliveDelaySeconds is called once in IkeConnectionController#setUp() and once
+        // at constructor of IkeConnectionController
+        verify(mMockIkeParams, times(2)).getNattKeepAliveDelaySeconds();
         mIkeConnectionCtrl.registerIkeSaRecord(mMockIkeSaRecord);
     }
 
@@ -1152,10 +1155,14 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
         IkeNetworkCallbackBase callback = enableMobilityAndReturnCb(true /* isDefaultNetwork */);
         onNetworkSetByUserWithDefaultParams(mIkeConnectionCtrl, newNetwork);
 
-        // hasIkeOption and getNattKeepAliveDelaySeconds were already called once by
-        // IkeConnectionController#setUp() so check they were called a second time
-        verify(mMockIkeParams, times(2)).hasIkeOption(IKE_OPTION_AUTOMATIC_NATT_KEEPALIVES);
-        verify(mMockIkeParams, times(2)).getNattKeepAliveDelaySeconds();
+        // hasIkeOption was already called once by IkeConnectionController#setUp() so check it was
+        // called second time
+        verify(mMockIkeParams, times(2)).hasIkeOption(
+                IKE_OPTION_AUTOMATIC_NATT_KEEPALIVES);
+        // getNattKeepAliveDelaySeconds was already called once each by
+        // IkeConnectionController#setUp() and at constructor of IkeConnectionController, so check
+        // it was called third time
+        verify(mMockIkeParams, times(3)).getNattKeepAliveDelaySeconds();
         verifyNetworkAndAddressesAfterMobilityEvent(
                 newNetwork, UPDATED_LOCAL_ADDRESS, REMOTE_ADDRESS, callback);
         verify(mMockConnectionCtrlCb).onUnderlyingNetworkUpdated();
@@ -1781,5 +1788,47 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
         final StringWriter stringWriter = new StringWriter();
         mIkeConnectionCtrl.dump(new PrintWriter(stringWriter), "");
         assertFalse(stringWriter.toString().isEmpty());
+    }
+
+    private Network createMockNetwork(int transportType) throws Exception {
+        Network network = mock(Network.class);
+        NetworkCapabilities caps = mock(NetworkCapabilities.class);
+        when(caps.hasTransport(transportType)).thenReturn(true);
+        when(mMockConnectManager.getNetworkCapabilities(network)).thenReturn(caps);
+
+        setupLocalAddressForNetwork(network, LOCAL_ADDRESS);
+        setupRemoteAddressForNetwork(network, REMOTE_ADDRESS);
+
+        return network;
+    }
+
+    @Test
+    public void testKeepaliveDelayUpdatesOnNetworkSwitchWithAutoKeeplive() throws Exception {
+        mIkeConnectionCtrl.enableMobility();
+
+        when(mMockIkeParams.getNattKeepAliveDelaySeconds()).thenReturn(200);
+        doReturn(true).when(mMockIkeParams).hasIkeOption(IKE_OPTION_AUTOMATIC_NATT_KEEPALIVES);
+
+        // Migrate IKE to a mocked Wifi netwpork
+        onNetworkSetByUserWithDefaultParams(mIkeConnectionCtrl, createMockNetwork(TRANSPORT_WIFI));
+
+        // Validate the keep alive time set for wifi
+        assertEquals(
+                TimeUnit.SECONDS.toMillis(AUTO_KEEPALIVE_DELAY_SEC_WIFI),
+                mIkeConnectionCtrl.getKeepaliveAlarmConfig().delayMs);
+
+        final int carrierConfigCellDelaySeconds = 100;
+        doReturn(carrierConfigCellDelaySeconds)
+                .when(mIkeContext)
+                .getDeviceConfigPropertyInt(anyString(), anyInt(), anyInt(), anyInt());
+
+        // Migrate IKE to a mocked cell netwpork
+        onNetworkSetByUserWithDefaultParams(
+                mIkeConnectionCtrl, createMockNetwork(TRANSPORT_CELLULAR));
+
+        // Validate the keep alive time set for celll
+        assertEquals(
+                TimeUnit.SECONDS.toMillis(carrierConfigCellDelaySeconds),
+                mIkeConnectionCtrl.getKeepaliveAlarmConfig().delayMs);
     }
 }

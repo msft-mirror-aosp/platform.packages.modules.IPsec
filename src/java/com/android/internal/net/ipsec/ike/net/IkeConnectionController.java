@@ -182,6 +182,7 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
     //Must only be touched on the IkeSessionStateMachine thread.
     private Network mUnderpinnedNetwork;
 
+    private int mKeepaliveDelaySeconds;
     private IkeNattKeepalive mIkeNattKeepalive;
 
     private static final SparseArray<String> NAT_STATUS_TO_STR;
@@ -213,6 +214,7 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
         mUseCallerConfiguredNetwork = config.ikeParams.getConfiguredNetwork() != null;
         mIpVersion = config.ikeParams.getIpVersion();
         mEncapType = config.ikeParams.getEncapType();
+        mKeepaliveDelaySeconds = config.ikeParams.getNattKeepAliveDelaySeconds();
         mDscp = config.ikeParams.getDscp();
         mUnderpinnedNetwork = null;
 
@@ -637,6 +639,12 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
         return Collections.unmodifiableSet(mIkeSaRecords);
     }
 
+    /** Returns the keepalive config */
+    @VisibleForTesting
+    public IkeAlarmConfig getKeepaliveAlarmConfig() {
+        return mKeepaliveAlarmConfig;
+    }
+
     /**
      * Updates the underlying network
      *
@@ -691,15 +699,7 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
 
         mIpVersion = ipVersion;
         mEncapType = encapType;
-
-        if (keepaliveDelaySeconds == IkeSessionParams.NATT_KEEPALIVE_INTERVAL_AUTO) {
-            keepaliveDelaySeconds = getKeepaliveDelaySec(mIkeContext, mIkeParams, mNc);
-        }
-        final long keepaliveDelayMs = TimeUnit.SECONDS.toMillis(keepaliveDelaySeconds);
-        if (keepaliveDelayMs != mKeepaliveAlarmConfig.delayMs) {
-            mKeepaliveAlarmConfig = mKeepaliveAlarmConfig.buildCopyWithDelayMs(keepaliveDelayMs);
-            restartKeepaliveIfRunning();
-        }
+        mKeepaliveDelaySeconds = keepaliveDelaySeconds;
 
         // Switch to monitor a new network. This call is never expected to trigger a callback
         mNetworkCallback.setNetwork(network, linkProperties, networkCapabilities);
@@ -1232,6 +1232,23 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
 
         mNetwork = network;
         mNc = networkCapabilities;
+
+        try {
+            if (mKeepaliveDelaySeconds == IkeSessionParams.NATT_KEEPALIVE_INTERVAL_AUTO) {
+                mKeepaliveDelaySeconds = getKeepaliveDelaySec(mIkeContext, mIkeParams, mNc);
+            }
+
+            final long keepaliveDelayMs = TimeUnit.SECONDS.toMillis(mKeepaliveDelaySeconds);
+
+            if (keepaliveDelayMs != mKeepaliveAlarmConfig.delayMs) {
+                mKeepaliveAlarmConfig =
+                        mKeepaliveAlarmConfig.buildCopyWithDelayMs(keepaliveDelayMs);
+                restartKeepaliveIfRunning();
+            }
+        } catch (IkeException e) {
+            mCallback.onError(wrapAsIkeException(e));
+            return;
+        }
 
         // If there is no local address on the Network, report a fatal error and return
         if (!hasLocalIpV4Address(linkProperties) && !linkProperties.hasGlobalIpv6Address()) {
